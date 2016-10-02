@@ -4,6 +4,7 @@
 #include "Task.h"
 #include <math.h>
 #include "Vector.h"
+#include "Output.h"
 
 extern float lastReward;
 extern ArmAction nextAction;
@@ -19,6 +20,8 @@ void logWeights() {
     logVector(theta, NUM_FEATURES);
 }
 
+/// Episodic Semi-gradient Sarsa for Control. 
+/// See Reinforcement Learning: An Introduction 2nd ed. (Sutton and Barto) page 230.
 void learnerUpdate(const ArmState &state, const ArmAction action, const ArmState &statePrime){
     ArmAction actionPrime = chooseAction(statePrime);
     float r = reward(state, action, statePrime);
@@ -46,6 +49,7 @@ inline ArmAction chooseRandomAction() {
 
 ArmAction chooseAction(const ArmState &state) {
     if (random(101) < epsilon) {
+        toggleLed();
         return chooseRandomAction();
     } 
 

@@ -1,12 +1,17 @@
 #include "Vector.h"
+#include "Strings.h"
+
+extern const char spaceString[];
+extern const char rightBracketString[];
+extern const char leftBracketString[];
 
 void logVector(const float vector[], size_t length) {
-    Serial.print("[");
+    Serial.print(leftBracketString);
     for( uint8_t i = 0; i < length; i++) {
-        Serial.print(" ");
+        Serial.print(spaceString);
         Serial.print(vector[i]);
     }
-    Serial.println("]");  
+    Serial.println(rightBracketString);  
 }
 
 float dot(const uint8_t first[], const uint8_t second[], size_t length) {

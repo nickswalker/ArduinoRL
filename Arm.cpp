@@ -2,26 +2,34 @@
 #include <Servo.h>
 #include "Learning.h"
 #include "Pins.h"
+#include "Strings.h"
+
+#define JOINT_MIN 20
+#define JOINT_MAX 160
+
+extern const char spaceString[];
 
 extern Servo elbowJoint;
 extern Servo baseJoint;
 
-ArmState currentState = {0, 0, 0};
-ArmState previousState = {0, 0, 0};
+ArmState currentState = {JOINT_MIN, JOINT_MIN, 0};
+ArmState previousState = {JOINT_MIN, JOINT_MIN, 0};
 
 void resetArm() {
-    elbowJoint.write(10);
-    baseJoint.write(10);
-    delay(100);
-    currentState = previousState = {10, 10, 0};
+    elbowJoint.write(JOINT_MIN);
+    baseJoint.write(JOINT_MIN);
+    digitalWrite(ledPin, LOW);
+    // Could have to move quite a bit to reset. Also, this delay lets the photocells get back to regular levels
+    delay(300);
+    currentState = previousState = {JOINT_MIN, JOINT_MIN, 0};
     
 }
 
 void logArmState() {
     Serial.print(currentState.basePosition);
-    Serial.print(" ");
+    Serial.print(spaceString);
     Serial.print(currentState.elbowPosition);
-    Serial.print(" ");
+    Serial.print(spaceString);
     Serial.println(currentState.ledOn); 
 }
 
@@ -79,20 +87,20 @@ void apply(ArmAction action) {
     currentState.elbowPosition += elbowMovement;
 
     // Limit the range of the joints before we send them the new state
-    if (currentState.basePosition < 10) {
-        currentState.basePosition = 10;
+    if (currentState.basePosition < JOINT_MIN) {
+        currentState.basePosition = JOINT_MIN;
     }
 
-    if (currentState.elbowPosition < 10) {
-        currentState.elbowPosition = 10;
+    if (currentState.elbowPosition < JOINT_MIN) {
+        currentState.elbowPosition = JOINT_MIN;
     }
 
-    if (currentState.basePosition > 170) {
-        currentState.basePosition = 170;
+    if (currentState.basePosition > JOINT_MAX) {
+        currentState.basePosition = JOINT_MAX;
     }
 
-    if (currentState.elbowPosition > 170) {
-        currentState.elbowPosition = 170;
+    if (currentState.elbowPosition > JOINT_MAX) {
+        currentState.elbowPosition = JOINT_MAX;
     }
     
     baseJoint.write(currentState.basePosition);
@@ -100,5 +108,5 @@ void apply(ArmAction action) {
     // Try adding another delay here avoid moving both motors at once.
     elbowJoint.write(currentState.elbowPosition);
     digitalWrite(ledPin, currentState.ledOn);
-    delay(200);
+    delay(100);
 }

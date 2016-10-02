@@ -1,11 +1,15 @@
 #include "Pins.h"
+#include "Strings.h"
 #include <Arduino.h>
 
-uint8_t lastCellOneReading = 200;
-uint8_t lastCellTwoReading = 200;
-uint8_t lastCellThreeReading = 200;
+extern const char spaceString[];
+
+uint8_t lastCellOneReading = 0;
+uint8_t lastCellTwoReading = 0;
+uint8_t lastCellThreeReading = 0;
 
 int sense(){
+    delay(50);
     lastCellOneReading = analogRead(photoCellOnePin);
     lastCellTwoReading = analogRead(photoCellTwoPin);
     lastCellThreeReading = analogRead(photoCellThreePin);
@@ -13,6 +17,11 @@ int sense(){
 }
 
 void logSensations() {
-    Serial.println(lastCellOneReading);
+    Serial.print(lastCellOneReading);
+    Serial.print(spaceString);
+    Serial.print(lastCellTwoReading);
+    Serial.print(spaceString);
+    Serial.println(lastCellThreeReading);
+    
 }
 

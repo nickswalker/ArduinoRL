@@ -4,6 +4,12 @@
 #include "Arm.h"
 #include "Task.h"
 #include "Sense.h"
+#include "Strings.h"
+#include "Output.h"
+
+extern const char spaceString[];
+extern const char cumulativeRewardString[];
+extern const char stepsString[];
  
 Servo baseJoint;
 Servo elbowJoint;         
@@ -16,8 +22,7 @@ ArmAction nextAction = StayStayOff;
 float lastReward = 0.0;
 
 int32_t cumulativeReward = 0.0;
-
-float currentEpisodeStep = 0.0;
+uint32_t currentEpisodeStep = 0;
  
 void setup() { 
     pinMode(photoCellOnePin, INPUT);
@@ -30,21 +35,18 @@ void setup() {
     elbowJoint.attach(elbowJointPin); 
 
     // Uncomment if you intend to use the debugging print statements
-    Serial.begin(57600);
+    Serial.begin(115200);
 } 
 
 void logStepInformation() {
-    Serial.print("cr");
-    Serial.print(cumulativeReward);
-    Serial.print("st");
-    Serial.println(currentEpisodeStep);
-    Serial.println();
+    Serial.print(currentEpisodeStep);
+    Serial.print(",");
+    Serial.println(cumulativeReward);
+
 }
 
-void chirp() {
-    digitalWrite(buzzerPin, HIGH);
-    delay(10);
-    digitalWrite(buzzerPin, LOW);
+void markEpisodeEnd() {
+    Serial.println("***");
 }
 
 void loop() { 
@@ -53,12 +55,12 @@ void loop() {
     //logArmState();
 
     sense();
-    //logSensations();
+    logSensations();
     
     // The SARSA learner will populate nextAction for us
     ArmAction previousAction = nextAction;
     learnerUpdate(previousState, previousAction, currentState);
-    logWeights();
+    //logWeights();
 
 
     currentEpisodeStep += 1;
@@ -71,6 +73,7 @@ void loop() {
         resetArm();
         cumulativeReward = 0.0;
         currentEpisodeStep = 0;
+        markEpisodeEnd();
     }
 
 } 

@@ -7,6 +7,15 @@ extern Servo elbowJoint;
 extern Servo baseJoint;
 
 ArmState currentState = {0, 0, 0};
+ArmState previousState = {0, 0, 0};
+
+void resetArm() {
+    elbowJoint.write(10);
+    baseJoint.write(10);
+    delay(100);
+    currentState = previousState = {10, 10, 0};
+    
+}
 
 void logArmState() {
     Serial.print(currentState.basePosition);
@@ -18,6 +27,10 @@ void logArmState() {
 
 /// Adjusts the arm's state.
 void apply(ArmAction action) {
+
+    // Let's keep track of this for the learner.
+    previousState = currentState;
+    // We've carefully ensured that the ledOn component is the lowest bit
     currentState.ledOn = (uint8_t)action & 1;
 
     int8_t baseMovement = 0;
@@ -83,7 +96,8 @@ void apply(ArmAction action) {
     }
     
     baseJoint.write(currentState.basePosition);
-    // To avoid moving both motors at once (creating a big spike in current draw), let's delay a bit.
+    // If you get a lot of servo jitter, it's likely because your power supply can't handle the initial current spike.
+    // Try adding another delay here avoid moving both motors at once.
     elbowJoint.write(currentState.elbowPosition);
     digitalWrite(ledPin, currentState.ledOn);
     delay(200);

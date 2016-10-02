@@ -35,6 +35,7 @@ typedef enum ArmAction {
     RightRightOn
 } ArmAction;
 
+void logWeights();
 ArmAction chooseRandomAction();
 ArmAction chooseAction(const ArmState &state);
 void learnerUpdate(const ArmState &state, const ArmAction action, const ArmState &statePrime);

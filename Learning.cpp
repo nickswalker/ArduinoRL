@@ -3,6 +3,7 @@
 #include "VFA.h"
 #include "Task.h"
 #include <math.h>
+#include "Vector.h"
 
 extern float lastReward;
 extern ArmAction nextAction;
@@ -13,6 +14,10 @@ uint8_t epsilon = 10;
 float alpha = 0.3;
 float gamma = 0.99;
 
+
+void logWeights() {
+    logVector(theta, NUM_FEATURES);
+}
 
 void learnerUpdate(const ArmState &state, const ArmAction action, const ArmState &statePrime){
     ArmAction actionPrime = chooseAction(statePrime);

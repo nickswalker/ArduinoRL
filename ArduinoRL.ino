@@ -15,7 +15,7 @@ ArmAction nextAction = StayStayOff;
 
 float lastReward = 0.0;
 
-uint32_t cumulativeReward = 0.0;
+int32_t cumulativeReward = 0.0;
 
 float currentEpisodeStep = 0.0;
  
@@ -33,8 +33,7 @@ void setup() {
     Serial.begin(57600);
 } 
 
-
-void logEpisodeEnd() {
+void logStepInformation() {
     Serial.print("cr");
     Serial.print(cumulativeReward);
     Serial.print("st");
@@ -64,9 +63,10 @@ void loop() {
 
     currentEpisodeStep += 1;
     cumulativeReward += lastReward;
+    logStepInformation();
 
     if (stateIsTerminal(currentState)) {
-        logEpisodeEnd();
+        logStepInformation();
         chirp();
         resetArm();
         cumulativeReward = 0.0;

@@ -6,6 +6,7 @@
 
 #define JOINT_MIN 20
 #define JOINT_MAX 160
+#define JOINT_MOVE_AMOUNT 30
 
 extern const char spaceString[];
 
@@ -47,44 +48,53 @@ void apply(ArmAction action) {
         // No need for StayStay cases. Default values handle that.
         case StayLeftOff:
         case StayLeftOn:
-            elbowMovement -= 10;
+            elbowMovement -= JOINT_MOVE_AMOUNT;
         break;
         case StayRightOff:
         case StayRightOn:
-            elbowMovement += 10;
+            elbowMovement += JOINT_MOVE_AMOUNT;
         break;
         case LeftStayOff:
         case LeftStayOn:
-            baseMovement -= 10;
+            baseMovement -= JOINT_MOVE_AMOUNT;
         break;
         case LeftLeftOff:
         case LeftLeftOn:
-            baseMovement -= 10;
-            elbowMovement -= 10;
+            baseMovement -= JOINT_MOVE_AMOUNT;
+            elbowMovement -= JOINT_MOVE_AMOUNT;
         break;
         case LeftRightOff:
         case LeftRightOn:
-            baseMovement -= 10;
-            elbowMovement += 10;
+            baseMovement -= JOINT_MOVE_AMOUNT;
+            elbowMovement += JOINT_MOVE_AMOUNT;
         break;
         case RightStayOff:
         case RightStayOn:
-            baseMovement += 10;
+            baseMovement += JOINT_MOVE_AMOUNT;
         break;
         case RightLeftOff:
         case RightLeftOn:
-            baseMovement += 10;
-            elbowMovement -= 10;
+            baseMovement += JOINT_MOVE_AMOUNT;
+            elbowMovement -= JOINT_MOVE_AMOUNT;
         break;
         case RightRightOff:
         case RightRightOn:
-            baseMovement += 10;
-            elbowMovement -= 10;
+            baseMovement += JOINT_MOVE_AMOUNT;
+            elbowMovement -= JOINT_MOVE_AMOUNT;
         break;
         
     }
     currentState.basePosition += baseMovement;
     currentState.elbowPosition += elbowMovement;
+
+    // Check to see if the movements caused an underflow
+    if (elbowMovement < 0 && currentState.elbowPosition > JOINT_MAX) {
+        currentState.elbowPosition = JOINT_MIN;
+    }
+
+    if (baseMovement < 0 && currentState.basePosition > JOINT_MAX) {
+        currentState.basePosition = JOINT_MIN;
+    }
 
     // Limit the range of the joints before we send them the new state
     if (currentState.basePosition < JOINT_MIN) {
@@ -108,5 +118,5 @@ void apply(ArmAction action) {
     // Try adding another delay here avoid moving both motors at once.
     elbowJoint.write(currentState.elbowPosition);
     digitalWrite(ledPin, currentState.ledOn);
-    delay(100);
+    delay(150);
 }

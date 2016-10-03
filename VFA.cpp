@@ -2,19 +2,15 @@
 #include "Learning.h"
 #include "Vector.h"
 
-float theta[NUM_FEATURES] = {};
+float theta[NUM_FEATURES] = {0};
 
 void extractFeatures(const ArmState &state, const ArmAction action, float phi[]) {
-    uint8_t elbowBin = state.elbowPosition / 10;
-    uint8_t baseBin = state.basePosition / 10;
 
     uint8_t ledOn = state.ledOn;
 
-    uint8_t elbowLeft = 0;
-    uint8_t elbowRight = 0;
+    int8_t elbowDirection = 0;
 
-    uint8_t baseLeft = 0;
-    uint8_t baseRight = 0;
+    int8_t baseDirection = 0;
     switch (action) {
         case StayLeftOff:
         case StayLeftOn:
@@ -22,7 +18,7 @@ void extractFeatures(const ArmState &state, const ArmAction action, float phi[])
         case LeftLeftOn:
         case RightLeftOff:
         case RightLeftOn:
-        elbowLeft = 1;
+        elbowDirection = -1;
     }
 
     switch (action) {
@@ -32,7 +28,7 @@ void extractFeatures(const ArmState &state, const ArmAction action, float phi[])
         case LeftRightOn:
         case RightRightOff:
         case RightRightOn:
-        elbowRight = 1;
+        elbowDirection = 1;
     }
 
     switch (action) {
@@ -42,7 +38,7 @@ void extractFeatures(const ArmState &state, const ArmAction action, float phi[])
         case RightLeftOn:
         case RightRightOff:
         case RightRightOn:
-        baseRight = 1;
+        baseDirection = 1;
     }
     switch (action) {
         case LeftStayOff:
@@ -51,16 +47,17 @@ void extractFeatures(const ArmState &state, const ArmAction action, float phi[])
         case LeftLeftOn:
         case LeftRightOff:
         case LeftRightOn:
-        baseLeft = 1;
+        baseDirection = -1;
     }
+    //squareBin(float(state.basePosition), float(state.elbowPosition), 20, 8, phi, 64);
+    //phi[64] = state.ledOn ? 1.0 : 0.0; 
+    //phi[65] = float(elbowDirection);
+    //phi[66] = float(baseDirection);
+    squareBinBinaryAugment(float(state.basePosition), float(state.elbowPosition), state.ledOn, 30, 6, phi, 64);
+    phi[65] = float(elbowDirection);
+    phi[66] = float(baseDirection);
+    phi[67] = distanceToGoal(state);    
 
-    phi[0] = float(elbowBin);
-    phi[1] = float(baseBin);
-    phi[2] = float(ledOn);
-    phi[3] = float(elbowRight);
-    phi[4] = float(elbowLeft);
-    phi[5] = float(baseRight);
-    phi[6] = float(baseLeft);
 }
 
 float value(const ArmState &state, const ArmAction action) {
@@ -68,4 +65,43 @@ float value(const ArmState &state, const ArmAction action) {
     extractFeatures(state, action, phi);
     return dot(theta, phi, NUM_FEATURES);
 }
+
+void squareBin(const float xValue, const float yValue, const float binBy, const uint8_t sideLength, float vector[], size_t length) {
+    uint8_t xBin = xValue / binBy;
+    uint8_t yBin = yValue / binBy;
+
+    uint8_t binIndex = sideLength * yBin + xBin;
+
+    for (uint8_t i = 0; i < length; i++) {
+        if (i == binIndex) {
+            vector[binIndex] = 1.0;
+        } else {
+            vector[i] = 0.0;
+        }
+    }
+}
+
+void squareBinBinaryAugment(const float xValue, const float yValue, const bool binaryValue, const float binBy, const uint8_t sideLength, float vector[], size_t length) {
+    uint8_t xBin = xValue / binBy;
+    uint8_t yBin = yValue / binBy;
+
+    uint8_t binIndex = sideLength * yBin + xBin;
+
+    if (binaryValue) {
+        binIndex += sideLength * sideLength;
+    }
+    for (uint8_t i = 0; i < length; i++) {
+        if (i == binIndex) {
+            vector[binIndex] = 1.0;
+        } else {
+            vector[i] = 0.0;
+        }
+    }    
+}
+
+float distanceToGoal(const ArmState &state) {
+    return 0.0001 * abs(float(state.basePosition) - 30.0) * abs(float(state.elbowPosition) - 30.0);
+}
+
+
 

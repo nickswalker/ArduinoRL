@@ -53,10 +53,13 @@ void extractFeatures(const ArmState &state, const ArmAction action, float phi[])
     //phi[64] = state.ledOn ? 1.0 : 0.0; 
     //phi[65] = float(elbowDirection);
     //phi[66] = float(baseDirection);
-    squareBinBinaryAugment(float(state.basePosition), float(state.elbowPosition), state.ledOn, 30, 6, phi, 64);
-    phi[65] = float(elbowDirection);
-    phi[66] = float(baseDirection);
-    phi[67] = distanceToGoal(state);    
+
+    // size of the vector should be: sideLength * sideLength * 2
+    squareBinBinaryAugment(float(state.basePosition), float(state.elbowPosition), state.ledOn, 35, 4, phi, 64);
+    phi[64] = float(elbowDirection);
+    phi[65] = float(baseDirection);
+    phi[66] = float(action & 1);
+   
 
 }
 

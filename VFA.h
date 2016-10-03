@@ -2,7 +2,7 @@
 #define VFA_H
 #include <Arduino.h>
 #include "Learning.h"
-#define NUM_FEATURES 68
+#define NUM_FEATURES 67u
 void extractFeatures(const ArmState &state, const ArmAction action, float phi[]);
 
 float value(const ArmState &state, ArmAction action);

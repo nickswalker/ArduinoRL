@@ -1,0 +1,157 @@
+\documentclass{article}
+
+\usepackage{graphicx} % Required for the inclusion of images
+\usepackage{natbib} % Required to change bibliography style to APA
+\usepackage{amsmath} % Required for some math elements 
+\usepackage[final]{pdfpages}
+\usepackage[parfill]{parskip}
+\usepackage{bm}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\usepackage{gensymb}
+\usepackage{mathtools} 
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+
+\usepackage{amsmath,amsfonts,amssymb}
+
+\setlength\parindent{0pt} % Removes all indentation from paragraphs
+
+\renewcommand{\labelenumi}{\alph{enumi}.} % Make numbering in the enumerate environment by letter rather than number (e.g. section 6)
+
+%\usepackage{times} % Uncomment to use the Times New Roman font
+
+%----------------------------------------------------------------------------------------
+%	DOCUMENT INFORMATION
+%----------------------------------------------------------------------------------------
+
+\title{Embedded agent for arm control \\ \large CS394R Fall 2016} % Title
+
+\author{\textsc{Nick Walker}} % Author name
+
+\date{\today} % Date for the report
+
+\begin{document}
+	
+	\maketitle % Insert the title, author and date
+	
+	
+	%----------------------------------------------------------------------------------------
+	%	SECTION 1
+	%----------------------------------------------------------------------------------------
+	
+	\section{Motivation}
+	
+	Embedded implementations of reinforcement learning agents will be key to enabling expressive interactions with everyday objects. These agents, which may not always have access to off-board computing resources, must learn from real-world interactions using limited memory and clock cycles. To explore the issues facing embedded agents, I built a robot and solved a simple control problem using reinforcement learning.
+	
+	
+	%----------------------------------------------------------------------------------------
+	%	SECTION 2
+	%----------------------------------------------------------------------------------------
+	
+	\section{Introduction}
+	
+	\subsection{Learning platform}
+	
+	I based the platform on the Atmel ATmega328p, a cheap and widely available 8bit microcontroller. It has 32kb of program memory, 2kb of SRAM and operates at 16MHz. This chip is used by popular hobbyist electronics boards like the Arduino Uno. For this project, I used an Arduino Pro Mini development board. It does not have a floating point unit, though the Arduino runtime provides a software float implementation.
+	
+	In order to construct a task representative of the complexity an embedded agent might face, I decided to build a two DOF arm with an LED actuator. The arm's joints are SG90 micro-servos, each capable of 180$\degree$ of rotation. The base joint is fixed to a surface, and the elbow joint is mounted to the base with 3 inch connecting dowels. The elbow joint controls another rod which is tipped with an LED. The motors are connected such that the middle of their rotation ranges align.
+	
+	\subsection{Problem}
+	
+	The agent must point the LED at a photo cell fixed to the surface in as few movements as possible, activating the LED as little as possible. The episode ends when the photo cell reads above a defined threshold. 
+	
+	\[ r(s,a,s')  \left\{
+	\begin{array}{ll}
+		50 & \text{if photocell activated} \\
+		-2 & \text{if LED activated and photocell not activated} \\
+		-1 & \text{otherwise} \\
+	\end{array} 
+	\right. \]
+	
+	
+	\subsection{Learning approach}
+	
+	\subsubsection{Tabular?}
+	
+	The servo control library used for this project allows motor targets to be set with single-degree precision, so a single motor can have integer positions in $M = {1\degree, 180\degree]}$. The LED can be either on or off. Thus the state space is the set formed by $M \times M \times \{0,1\}$, which has cardinality 64800. At a given time step, the agent may choose to keep a joint fixed, move it left, or move it right. It can choose to activate or deactivate the LED. Assuming we restrict the agent to movements of unit magnitude, this means there are 18 actions.
+
+	A state-action value table based on this representation, assuming 4 byte floats, would occupy more than 4 megabytes of memory. Due to the spread of the light of the LED, it may be feasible to reduce the fidelity of the joint state representation and still achieve good performance, and because the optimal policy will likely always elect to move a joint, we may be able to remove actions which do not move a joint with little adverse effect. Even then, the microcontroller could only theoretically fit less than 10\% of all state action pairs (without careful optimization, quite a bit less, as the stack needs to live in memory as well).
+	
+	\subsubsection{Function approximation}
+	
+	Though it may initially seem like the microcontroller could support a reasonable number of features, inspection reveals this is not the case. Consider the episodic semi-gradient one-step Sarsa algorithm.
+	
+	\begin{equation}\label{eqn:update}
+	\bm{\theta}_{t+1} = \bm{\theta}_t + \alpha \Big[R_{t+1} + \gamma \hat{q}(S_{t+1}, A_{t+1}\, \bm{\theta}_t) - \hat{q}(S_t, A_t, \bm{\theta}_t)\Big]\Delta\hat{q}(S_t, A_t, \bm{\theta}_t)\tag{1}
+	\end{equation}
+
+	As shown in the implementation, it is possible to implement the update using only $n$ additional space, where $n$ is the number of weights. While this implementation is not difficult, it is easy to do incorrectly. For instance, if the action selection step is not placed before the memory allocation, the implementation will actually consume $2n$ stack memory; maximizing the value function over possible next states requires an additional $n$ stack space.
+	
+		\begin{algorithm}
+			\caption{Memory-conservative Episodic Semi-gradient One-step Sarsa}
+			\label{alg:update}
+			\begin{algorithmic}[1] % The number tells where the line numbering should start
+				\Procedure{Update}{$S_t$, $A_t$, $S_{t+1}$, $\theta$}
+				\State $A_{t+1} \gets $ choose action from $S_{t+1}$ according to policy
+				\State Allocate $x$ to be a vector the size of $\theta$, and floats $r$ and $b$
+				\State $r\gets r(S_t$, $A_t$, $S_{t+1}$)
+				\State $x \gets \phi(S_t, A_t)$ \Comment store $\phi_{t}$
+				\State $b \gets \theta^\top \phi'$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discared $\phi_{t}$
+				\State $x \gets \phi(S_{t+1}, A_{t+1})$ \Comment store $\phi_{t+1}$
+				\State $error \gets r + \gamma b - \theta^\top x$ \Comment $error$ is now the bracketed term in eq. $\ref{eqn:update}$
+				\State $x \gets (\alpha error)x$ \Comment $x$ is now the right side of the addition in eq. $\ref{eqn:update}$
+				\State $\theta \gets \theta + x$
+				\
+				\EndProcedure
+			\end{algorithmic}
+		\end{algorithm}
+	
+	Since the update and maximization steps can be done with $n$ stack space, and the weights take $n$ space, we are actually constrained to 1kb or 250 features (less the incidental stack space required during the update step).
+	
+	Using approximation allows us to provide reasonable values across the breadth of the value function, but, due to the memory requirements of the update and maximization steps, not as accurate estimates as one might initially imagine.
+	
+	I have not dwelt on time efficiency as 16MHz is a fair amount of computation, even with software floating point operations. For this project, I was satisfied as long as actions could be selected more quickly than the motors could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial.\footnote{If time performance requirements were tighter, special attention would need to be paid to the very expensive process of action selection, which involves $|A|$ value function queries, each costing $n$ multiplications.}
+
+	%----------------------------------------------------------------------------------------
+	%	SECTION 3
+	%----------------------------------------------------------------------------------------
+	
+	
+	\section{Experimental setup}
+	
+	\subsection{Features}
+
+	***
+	
+	%----------------------------------------------------------------------------------------
+	%	SECTION 4
+	%----------------------------------------------------------------------------------------
+	
+	
+	\section{Results}
+
+	
+	***
+	
+		\begin{figure}[h]
+			\begin{center}
+				\includegraphics[width=\textwidth]{figure_0.pdf}
+				\caption{***}
+			\end{center}
+		\end{figure}
+
+	
+
+	%----------------------------------------------------------------------------------------
+	%	SECTION 3
+	%----------------------------------------------------------------------------------------
+	
+	\section{Conclusions}
+
+	***
+	
+\end{document}

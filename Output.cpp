@@ -3,7 +3,7 @@
 bool ledState = false;
 void chirp() {
     digitalWrite(buzzerPin, HIGH);
-    delay(10);
+    delay(5);
     digitalWrite(buzzerPin, LOW);
 }
 

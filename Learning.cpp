@@ -12,7 +12,7 @@ extern float theta[];
 
 // A percentage (between 0 - 100)
 uint8_t epsilon = 10;
-float alpha = 0.3;
+float alpha = 0.2;
 float gamma = 0.99;
 
 
@@ -58,14 +58,20 @@ ArmAction chooseAction(const ArmState &state) {
     } 
 
     float maxValue = -100000.0;
-    ArmAction bestAction;
+    ArmAction bestActions[NUM_ACTIONS] = {};
+    uint8_t numBestActions = -1;
     for (uint8_t i = 0; i < NUM_ACTIONS; i++) {
         float candidateValue = value(state, (ArmAction)i);
         if (candidateValue > maxValue) {
             maxValue = candidateValue;
-            bestAction = (ArmAction)i;
+            bestActions[0] = (ArmAction)i;
+            numBestActions = 1;
+        } else if (candidateValue == maxValue) {
+            bestActions[numBestActions] = (ArmAction)i;
+            numBestActions +=1;
         }
     }
-    return bestAction;
+
+    return bestActions[random(numBestActions)];
 }
 

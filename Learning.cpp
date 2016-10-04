@@ -25,17 +25,21 @@ void logWeights() {
 void learnerUpdate(const ArmState &state, const ArmAction action, const ArmState &statePrime){
     ArmAction actionPrime = chooseAction(statePrime);
     float r = reward(state, action, statePrime);
-    float phi[NUM_FEATURES];
-    float phiPrime[NUM_FEATURES];
-    extractFeatures(state, action, phi);
-    extractFeatures(statePrime, actionPrime, phiPrime);
+    float x[NUM_FEATURES];
+    // place phi_t+1 into x
+    extractFeatures(statePrime, actionPrime, x);
 
-    float error = r + gamma * dot(theta, phiPrime, NUM_FEATURES) - dot(theta, phi, NUM_FEATURES);
+    float v_t1 = dot(theta, x, NUM_FEATURES);
+    
+    // fill x with phi_t
+    extractFeatures(state, action, x);
 
-    // Overwrite phi with the final weight error
-    multiply(alpha * error, phi, NUM_FEATURES);
+    float error = r + gamma * v_t1 - dot(theta, x, NUM_FEATURES);
 
-    add(theta, phi, NUM_FEATURES);
+    // Overwrite x with the final weight error
+    multiply(alpha * error, x, NUM_FEATURES);
+
+    add(theta, x, NUM_FEATURES);
         
     nextAction = actionPrime;
     lastReward = r;

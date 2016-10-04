@@ -54,7 +54,7 @@
 	
 	\section{Introduction}
 	
-	\subsection{Learning platform}
+	\subsection{Learning Platform}
 	
 	I based the platform on the Atmel ATmega328p, a cheap and widely available 8bit microcontroller. It has 32kb of program memory, 2kb of SRAM and operates at 16MHz. This chip is used by popular hobbyist electronics boards like the Arduino Uno. For this project, I used an Arduino Pro Mini development board. It does not have a floating point unit, though the Arduino runtime provides a software float implementation.
 	
@@ -73,7 +73,7 @@
 	\right. \]
 	
 	
-	\subsection{Learning approach}
+	\subsection{Learning Approach}
 	
 	\subsubsection{Tabular?}
 	
@@ -81,7 +81,7 @@
 
 	A state-action value table based on this representation, assuming 4 byte floats, would occupy more than 4 megabytes of memory. Due to the spread of the light of the LED, it may be feasible to reduce the fidelity of the joint state representation and still achieve good performance, and because the optimal policy will likely always elect to move a joint, we may be able to remove actions which do not move a joint with little adverse effect. Even then, the microcontroller could only theoretically fit less than 10\% of all state action pairs (without careful optimization, quite a bit less, as the stack needs to live in memory as well).
 	
-	\subsubsection{Function approximation}
+	\subsubsection{Function Approximation}
 	
 	Though it may initially seem like the microcontroller could support a reasonable number of features, inspection reveals this is not the case. Consider the episodic semi-gradient one-step Sarsa algorithm.
 	
@@ -92,7 +92,7 @@
 	As shown in the implementation, it is possible to implement the update using only $n$ additional space, where $n$ is the number of weights. While this implementation is not difficult, it is easy to do incorrectly. For instance, if the action selection step is not placed before the memory allocation, the implementation will actually consume $2n$ stack memory; maximizing the value function over possible next states requires an additional $n$ stack space.
 	
 		\begin{algorithm}
-			\caption{Memory-conservative Episodic Semi-gradient One-step Sarsa}
+			\caption{Memory-conscious Episodic Semi-gradient One-step Sarsa}
 			\label{alg:update}
 			\begin{algorithmic}[1] % The number tells where the line numbering should start
 				\Procedure{Update}{$S_t$, $A_t$, $S_{t+1}$, $\theta$}
@@ -114,14 +114,16 @@
 	
 	Using approximation allows us to provide reasonable values across the breadth of the value function, but, due to the memory requirements of the update and maximization steps, not as accurate estimates as one might initially imagine.
 	
-	I have not dwelt on time efficiency as 16MHz is a fair amount of computation, even with software floating point operations. For this project, I was satisfied as long as actions could be selected more quickly than the motors could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial.\footnote{If time performance requirements were tighter, special attention would need to be paid to the very expensive process of action selection, which involves $|A|$ value function queries, each costing $n$ multiplications.}
+	I have not dwelt on time efficiency as 16MHz is a fair amount of computation, even with software floating point operations. For this project, I was satisfied as long as actions could be selected more quickly than the motors could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial.\footnote{If time performance requirements were tighter, special attention would need to be paid to the action selection process, which involves $|A|$ value function queries, each costing $n$ multiplications.}
 
 	%----------------------------------------------------------------------------------------
 	%	SECTION 3
 	%----------------------------------------------------------------------------------------
 	
 	
-	\section{Experimental setup}
+	\section{Experimental Setup}
+	
+	Between episodes, the arm resets to have its joints at their minimum angles and turns the LED off. A small delay is used between action execution and sensing to allow the arm to settle. The photocell threshold is calibrated before every session to ensure that no spurious rewards are granted.
 	
 	\subsection{Features}
 
@@ -134,8 +136,7 @@
 	
 	\section{Results}
 
-	
-	***
+	Proper policy evaluation is difficult when working with an actual robot. Running one hundred episodes takes about 2 minutes. The agent takes about 500 steps over the course of these episodes, so evaluating the policy with a fair resolution adds a 50\% overhead. Due to time constraints and robot well-being, I only provide the learning curve and some supplementary images and video to demonstrate the approach's efficacy.
 	
 		\begin{figure}[h]
 			\begin{center}
@@ -147,11 +148,33 @@
 	
 
 	%----------------------------------------------------------------------------------------
-	%	SECTION 3
+	%	SECTION 5
 	%----------------------------------------------------------------------------------------
 	
 	\section{Conclusions}
 
 	***
+	
+	\section{Appendix: Bill of Materials}
+	
+
+	\begin{center}
+		\begin{tabular}{ l r r  p{5cm} }
+			\hline
+			Component & Quantity & Unit Price (\$) & Note \\ \hline
+			Arduino Pro Mini, 5v & 1 & 3.00 &  \\ 
+			Breadboard & 1 & 4.00 & \\
+			SG90 servo & 2 & 3.00 & \\ 
+			Dowel rods & 3 & 2.00 & \\
+			1500uF capacitor & 2 & 1.00 & \\ 
+			LED & 1 & 0.10 & The brighter the better.\\ 
+			Photocell & 3 & 0.10 & \\ 
+			5v 2.5A power supply & 1 & 8.00 & If variable supply unavailable. \\ 
+			Assorted jumpers & & 3.00 & \\
+			Adhesives, project surface & & 4.00 & \\
+			\hline
+		\end{tabular}
+	\end{center}
+	
 	
 \end{document}

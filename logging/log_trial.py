@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple
 
 import numpy as np
@@ -5,16 +6,21 @@ import serial
 
 episode_end_marker = "***"
 theta_marker = "["
-good_performance_threshold = 20
+good_performance_threshold = 5
 times_seen_threshold = 9
-max_num_episodes = 30
+max_num_episodes = 100
 
 
 def main():
     episodes = collect_data()
     episode_performance = convert_to_performance(episodes)
 
-    np.savetxt("trial.csv", episode_performance, delimiter=",", fmt="%s")
+    trial_num = count_trials()
+    np.savetxt("trials/" + str(trial_num) + ".csv", episode_performance, delimiter=",", fmt="%s")
+
+
+def count_trials():
+    return len([name for name in os.listdir('trials') if os.path.isfile("trials/" + name)])
 
 
 def convert_to_performance(episodes: List[Tuple[List, List]]) -> List[
@@ -49,8 +55,11 @@ def collect_data() -> List[Tuple[List, List]]:
             episodes.append(current_episode)
             if len(current_episode[0]) < good_performance_threshold:
                 times_seen += 1
+            else:
+                times_seen = 0
             if times_seen > times_seen_threshold:
-                converged = True
+                # converged = True
+                ()
             current_episode = ([], [])
         else:
             components = lineString.split(",")

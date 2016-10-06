@@ -21,12 +21,12 @@ def main():
 
     series = [i for i in range(0, len(means))]
 
-    plot = Plot("Mean reward per episode, p=0.05")
+    plot = Plot("Mean reward per episode, p=0.10")
     plot.plot_evaluations(series, means, confidences, "Sarsa")
     plot.save("figure0")
 
 
-def mean_confidence_interval(data, confidence=0.95):
+def mean_confidence_interval(data, confidence=0.90):
     a = 1.0 * np.array(data)
     n = len(a)
     m, se = np.mean(a), scipy.stats.sem(a)
@@ -56,7 +56,7 @@ class Plot:
     def __init__(self, title):
         self.ax = pp.axes()
         self.ax.set_title(title, fontsize=14, fontweight='bold')
-        self.ax.set_xlabel('Reward per episode')
+        self.ax.set_xlabel('Episodes')
         self.ax.set_ylabel('Reward')
         self.markers = {"o", "D", "^", "8", "h", "s"}
 

@@ -7,6 +7,7 @@ float theta[NUM_FEATURES] = {0};
 void extractFeatures(const ArmState &state, const ArmAction action, float phi[]) {
 
     uint8_t ledOn = state.ledOn;
+    bool turnsLedOn = action & 1;
 
     int8_t elbowDirection = 0;
 
@@ -55,10 +56,11 @@ void extractFeatures(const ArmState &state, const ArmAction action, float phi[])
     //phi[66] = float(baseDirection);
 
     // size of the vector should be: sideLength * sideLength * 2
-    squareBinBinaryAugment(float(state.basePosition), float(state.elbowPosition), state.ledOn, 35, 4, phi, 64);
-    phi[64] = float(elbowDirection);
-    phi[65] = float(baseDirection);
-    phi[66] = float(action & 1);
+    squareBinBinaryAugment(float(state.basePosition), float(state.elbowPosition), state.ledOn, 20, 8, phi, 128);
+    phi[128] = float(elbowDirection);
+    phi[129] = float(baseDirection);
+    phi[130] = float(turnsLedOn);
+    phi[131] = float(turnsLedOn && (state.basePosition > 90));
    
 
 }

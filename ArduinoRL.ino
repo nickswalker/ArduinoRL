@@ -7,6 +7,13 @@
 #include "Strings.h"
 #include "Output.h"
 
+#define EVALUATION_MODE 1
+#define EVALUATION_SWITCH_POINT 50
+#define EVALUATION_MAX_STEPS 200
+
+extern float alpha;
+extern uint8_t epsilon;
+
 extern const char spaceString[];
 extern const char cumulativeRewardString[];
 extern const char stepsString[];
@@ -23,8 +30,10 @@ float lastReward = 0.0;
 
 int32_t cumulativeReward = 0.0;
 uint32_t currentEpisodeStep = 0;
+uint16_t currentEpisode = 0;
  
 void setup() { 
+    randomSeed(analogRead(A3));
     pinMode(photoCellOnePin, INPUT);
     pinMode(photoCellTwoPin, INPUT);
     pinMode(photoCellThreePin, INPUT);
@@ -55,7 +64,7 @@ void loop() {
     //logArmState();
 
     sense();
-    logSensations();
+    //logSensations();
     
     // The SARSA learner will populate nextAction for us
     ArmAction previousAction = nextAction;
@@ -67,13 +76,18 @@ void loop() {
     cumulativeReward += lastReward;
     logStepInformation();
 
-    if (stateIsTerminal(currentState)) {
+    if (stateIsTerminal(currentState) || (EVALUATION_MODE && currentEpisodeStep > EVALUATION_MAX_STEPS)) {
         logStepInformation();
         chirp();
-        resetArm();
+        resetArmToRandomPosition();
         cumulativeReward = 0.0;
         currentEpisodeStep = 0;
         markEpisodeEnd();
+        currentEpisode += 1;
+        if (EVALUATION_MODE && currentEpisode > 50) {
+            epsilon = 0;
+            alpha = 0.0;
+        }
     }
 
 } 

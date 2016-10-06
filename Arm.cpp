@@ -4,9 +4,9 @@
 #include "Pins.h"
 #include "Strings.h"
 
-#define JOINT_MIN 20
-#define JOINT_MAX 160
-#define JOINT_MOVE_AMOUNT 30
+#define JOINT_MIN 15
+#define JOINT_MAX 170
+#define JOINT_MOVE_AMOUNT 20
 
 extern const char spaceString[];
 
@@ -21,9 +21,21 @@ void resetArm() {
     baseJoint.write(JOINT_MIN);
     digitalWrite(ledPin, LOW);
     // Could have to move quite a bit to reset. Also, this delay lets the photocells get back to regular levels
-    delay(300);
+    delay(700);
     currentState = previousState = {JOINT_MIN, JOINT_MIN, 0};
     
+}
+
+
+void resetArmToRandomPosition() {
+    uint8_t elbow = random(JOINT_MIN, JOINT_MAX);
+    uint8_t base = random(JOINT_MIN, JOINT_MAX);
+    digitalWrite(ledPin, LOW);
+
+    baseJoint.write(base);
+    elbowJoint.write(elbow);
+    delay(700);
+    currentState = previousState = {base, elbow, 0};
 }
 
 void logArmState() {

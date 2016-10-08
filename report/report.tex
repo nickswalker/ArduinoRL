@@ -63,9 +63,9 @@
 	
 	\begin{figure}
 		\centering
-		\includegraphics[height=4.5cm]{../photos/eagle_crop.jpg}
-		\includegraphics[height=4.5cm]{../photos/arm_detail_crop.jpg}
-		\caption{Left: The learning platform. Two photocells are pictured, but only the left one was used. Right: The arm in detail. Note that the LED has its sides covered to reduce width of its light cone. }
+		\includegraphics[width=10cm]{../photos/eagle_small.jpg}
+		\includegraphics[width=10cm]{../photos/arm_detail_small.jpg}
+		\caption{Top: The learning platform. Two photocells are pictured, but only the left one was used. Bottom: The arm in detail. Note that the LED has its sides covered to reduce the width of its light cone. }
 		\label{fig:platform}
 	\end{figure}
 	
@@ -154,7 +154,7 @@
 	
 	\subsection{Features}
 
-	The value function approximator uses a mix of coarse representation and selected binary features. The range of each joint is divided into 20\degree\space sections. The two sets of section features along with a binary feature describing the LED state are then gridded, resulting in 128 mutually exclusive binary features. Two action features characterize the direction of each joint's movement, taking values in $\{0, 1, -1\}$, and a binary feature describes whether or not the LED is activated by the action.
+	The value function approximator uses a mix of simple discretization and selected binary features. The range of each joint is divided into 20\degree\space sections. The two sets of section features along with a binary feature describing the LED state are then gridded, resulting in 128 mutually exclusive binary features. Two action features characterize the direction of each joint's movement, taking values in $\{0, 1, -1\}$, and a binary feature describes whether or not the LED is activated by the action.
 	
 	This representation is well below the theoretical maximum number of weights for the microcontroller. With more time, additional features could be added.
 	
@@ -198,21 +198,21 @@
 	
 		\begin{figure}[!htb]
 			\centering
-			\includegraphics[width=10cm]{../photos/long_shutter.jpg}
+			\includegraphics[width=10cm]{../photos/long_shutter_small.jpg}
 			\caption{30 second exposure taken early in the agent's learning}
 			\label{fig:long_shutter}
 		\end{figure}
 		
 		\begin{figure}[!htb]
 			\centering
-			\includegraphics[width=10cm]{../photos/breadboard.jpg}
+			\includegraphics[width=10cm]{../photos/breadboard_small.jpg}
 			\caption{Detail of the breadboard. A piezo buzzer beeps whenever an episode ends. Voltage dividers for the photocells are visible. The side board provides voltage regulation. At the top left, two capacitor banks smooth the high draw that occurs when the servos start. }
 			\label{fig:breadboard}
 		\end{figure}
 		
 		\begin{figure}[!htb]
 			\centering
-			\includegraphics[width=10cm]{../photos/action_detail.jpg}
+			\includegraphics[width=10cm]{../photos/action_detail_small.jpg}
 			\caption{The agent illuminates the photocell.}
 			\label{fig:breadboard}
 		\end{figure}

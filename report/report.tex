@@ -96,7 +96,25 @@
 	Approximation allows tight control of the amount of memory being used to represent the value function. Because of the complex update step however, only at most half of the memory can be used for storing weights. Even then, the update step must be implemented carefully to control the stack size. Consider the episodic semi-gradient one-step Sarsa update:
 	
 	\begin{equation}\label{eqn:update}
-	\bm{\theta}_{t+1} = \bm{\theta}_t + \alpha \Big[R_{t+1} + \gamma \hat{q}(S_{t+1}, A_{t+1}\, \bm{\theta}_t) - \hat{q}(S_t, A_t, \bm{\theta}_t)\Big]\Delta\hat{q}(S_t, A_t, \bm{\theta}_t)\tag{1}
+	\bm{\theta}_{t+1} = 
+	\bm{\theta}_t + 
+	\alpha \Big[
+		R_{t+1} + 
+		\gamma \hat{q}(S_{t+1}, A_{t+1}\, \bm{\theta}_t) 
+		- \hat{q}(S_t, A_t, \bm{\theta}_t)
+	\Big]
+	\Delta\hat{q}(S_t, A_t, \bm{\theta}_t)\tag{1}
+	\end{equation}
+	
+	And in the linear case:
+	
+	\begin{equation}\label{eqn:linear_update}
+		\bm{\theta}_{t+1} = 
+		\bm{\theta}_t + 
+			\alpha \Big[
+				R_{t+1} + \gamma\, \bm{\theta}_t^\top\bm{\phi}_{t+1} \space
+				- \bm{\theta}_t^\top\bm{\phi}_t
+			\Big]\bm{\phi}_t\tag{2}
 	\end{equation}
 
 	It is possible to implement the update using only $n$ additional space, where $n$ is the number of weights, but this is easy to do incorrectly. If the action selection step is placed after the memory allocation, the stack will consume $2n$ memory; maximizing the value function over possible next states requires an additional $n$ stack space.
@@ -105,16 +123,16 @@
 			\caption{Memory-conscious Episodic Semi-gradient One-step Sarsa}
 			\label{alg:update}
 			\begin{algorithmic}[1] % The number tells where the line numbering should start
-				\Procedure{Update}{$S_t$, $A_t$, $S_{t+1}$, $\theta$}
+				\Procedure{Update}{$S_t$, $A_t$, $S_{t+1}$, \bm{$\theta$}}
 				\State $A_{t+1} \gets $ choose action from $S_{t+1}$ according to policy
-				\State Allocate $x$ to be a vector the size of $\theta$, and floats $r$ and $b$
+				\State Allocate \bm{$x$} to be a vector the size of \bm{$\theta$}, and floats $r$ and $a$
 				\State $r\gets r(S_t$, $A_t$, $S_{t+1}$)
-				\State $x \gets \phi(S_t, A_t)$ \Comment store $\phi_{t}$
-				\State $b \gets \theta^\top \phi'$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discared $\phi_{t}$
-				\State $x \gets \phi(S_{t+1}, A_{t+1})$ \Comment store $\phi_{t+1}$
-				\State $error \gets r + \gamma b - \theta^\top x$ \Comment $error$ is now the bracketed term in eq. $\ref{eqn:update}$
-				\State $x \gets (\alpha error)x$ \Comment $x$ is now the right side of the addition in eq. $\ref{eqn:update}$
-				\State $\theta \gets \theta + x$
+				\State $\bm{x} \gets \phi(S_{t+1}, A_{t+1})$ \Comment store $\phi_{t+1}$
+				\State $a \gets \bm{\theta}^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phi_{t+1}$
+				\State $\bm{x} \gets \phi(S_{t}, A_{t})$ \Comment store $\phi_t$
+				\State $a \gets r + \gamma v - \bm{\theta}^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
+				\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the TD error
+				\State \bm{$\theta} \gets \bm{\theta} + x$
 				\
 				\EndProcedure
 			\end{algorithmic}
@@ -132,7 +150,7 @@
 	\section{Experimental Setup}
 	
 
-	The agent learns for 50 episodes using $\alpha =$ 0.2, $\gamma =$ 0.99,  following an $\epsilon$-greedy policy with $\epsilon=$0.1. Then, the agent operates in an evaluation mode for 50 episodes with $\alpha=\epsilon=0.0$. During this period, episodes are limited to 200 steps in case the agent executes a policy that never reaches the goal. A small delay is used between action execution and sensing to allow the arm to settle. The photocell threshold is calibrated before every session to prevent spurious activations.
+	The agent learns for 50 episodes using $\alpha =$ 0.2, $\gamma =$ 0.99,  following an $\epsilon$-greedy policy with $\epsilon=$ 0.1. Then, the agent operates in an evaluation mode for 50 episodes with $\alpha=\epsilon=0.0$. During this period, episodes are limited to 200 steps in case the agent executes a policy that never reaches the goal. A small delay is used between action execution and sensing to allow the arm to settle. The photocell threshold is calibrated before every session to prevent spurious activations.
 	
 	\subsection{Features}
 

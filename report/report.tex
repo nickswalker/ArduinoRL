@@ -8,13 +8,14 @@
 \usepackage{bm}
 
 \usepackage[utf8]{inputenc}
+\usepackage{mathpazo}
 \usepackage[T1]{fontenc}
 \usepackage{textcomp}
 \usepackage{gensymb}
 \usepackage{mathtools} 
 \usepackage{algorithm}
 \usepackage{algpseudocode}
-
+\usepackage{fancyhdr}
 
 \usepackage{amsmath,amsfonts,amssymb}
 
@@ -28,7 +29,7 @@
 %	DOCUMENT INFORMATION
 %----------------------------------------------------------------------------------------
 
-\title{Embedded agent for arm control \\ \large CS394R Fall 2016} % Title
+\title{Embedded Agent for Arm Control} % Title
 
 \author{\textsc{Nick Walker}} % Author name
 
@@ -56,7 +57,7 @@
 	
 	\subsection{Learning Platform}
 	
-	I based the platform on the Atmel ATmega328p, a cheap and widely available 8-bit microcontroller. It has 32kb of program memory, 2kb of SRAM and operates at 16MHz. It is used by popular hobbyist electronics boards like the Arduino Uno, and for this project, I used an Arduino Pro Mini. It does not have a floating point unit, though the Arduino runtime provides a software float implementation.
+	I based the platform on the Atmel ATmega328p, a cheap and widely available 8-bit microcontroller. It has 32kb of program memory, 2kb of SRAM and operates at 16MHz. It is used by popular hobbyist electronics boards like the Arduino Uno, and for this project, I used an Arduino Pro Mini. It does not have a floating point unit, though the Arduino runtime provides a software implementation that mimics 32bit IEEE float.
 	
 	In order to provide a reasonably complex task for the agent, I decided to build a two degrees of freedom arm with an LED actuator. The arm's joints are SG90 micro-servos, each capable of 155$\degree$ of rotation. The base joint is fixed to a surface, and the elbow joint is mounted to the base with a pair of three-inch dowel rods. The elbow joint controls another rod which is tipped with an LED. The motors are connected such that the middle of their rotation ranges align.
 	
@@ -65,7 +66,7 @@
 		\centering
 		\includegraphics[width=10cm]{../photos/eagle_small.jpg}
 		\includegraphics[width=10cm]{../photos/arm_detail_small.jpg}
-		\caption{Top: The learning platform. Two photocells are pictured, but only the left one was used. Bottom: The arm in detail. Note that the LED has its sides covered to reduce the width of its light cone. }
+		\caption{Top: The learning platform. Two photocells are pictured, but only the left one was used. Black tape marks the unused position for a third. Bottom: The arm in detail. Note that the LED has its sides covered to reduce the width of its light cone. }
 		\label{fig:platform}
 	\end{figure}
 	
@@ -87,9 +88,9 @@
 	
 	\subsubsection{Tabular?}
 	
-	The servo control library used for this project allows motor targets to be set with single-degree precision, so a single joint can have integer positions in  $[0\degree, 155\degree]$. For each configuration, the LED can be either on or off, so there are a total of 48050 states. At a given time step, the agent may choose to keep a joint fixed, move it left, or move it right and it can choose to activate or deactivate the LED. Assuming we restrict the agent to movements of unit magnitude, this means there are 18 actions.
+	The servo control library used for this project allows motor targets to be set with single-degree precision, so a single joint can have integer positions in  $[0\degree, 155\degree]$. For each configuration, the LED can be either on or off, so there are a total of 48050 states. At a given time step, the agent may choose to keep a joint fixed, move it left, or move it right and it can choose to activate or deactivate the LED. Assuming we restrict the agent to movements of unit magnitude, this means there are eighteen actions.
 
-	A state-action value table based on this representation, assuming 4 byte floats, would occupy more than 4 megabytes of memory. Due to the spread of the light of the LED, it may be feasible to reduce the fidelity of the joint state representation and still achieve good performance, and because the optimal policy will likely always elect to move a joint, we may be able to remove actions which do not move a joint with little adverse effect. Even then, the microcontroller could only theoretically fit 10\% of all state action pairs (less without careful optimization, as the stack needs to live in memory as well). A tabular approach is not feasible due to the system's memory contraints.
+	A state-action value table based on this representation, assuming 4 byte floats, would occupy more than 4 megabytes of memory. Due to the spread of the light of the LED, it may be feasible to reduce the fidelity of the joint state representation and still achieve good performance, and because the optimal policy will likely always elect to move a joint, we may be able to remove actions which do not move a joint with little adverse effect. Even then, the microcontroller could only theoretically fit 10\% of all state action pairs (less without careful optimization, as the stack needs to live in memory as well). A tabular approach is not feasible due to the system's memory constraints.
 	
 	\subsubsection{Function Approximation}
 	
@@ -131,16 +132,27 @@
 				\State $a \gets \bm{\theta}^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phi_{t+1}$
 				\State $\bm{x} \gets \phi(S_{t}, A_{t})$ \Comment store $\phi_t$
 				\State $a \gets r + \gamma v - \bm{\theta}^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
-				\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the TD error
+				\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now weight update
 				\State \bm{$\theta} \gets \bm{\theta} + x$
 				\
 				\EndProcedure
 			\end{algorithmic}
 		\end{algorithm}
 		
-	An approximation approach implemented on the microcontroller is constrained to 250 features or 1kb (less the incidental stack space required during the update step). It was not clear that this would be sufficient for good performance, but it was the only feasible approach. I implemented a semi-gradient one-step Sarsa agent.
+		I have not dwelt on time efficiency since, even with software floating point operations, 16MHz permits a fair amount of computation. For this project, I was satisfied as long as actions could be selected more quickly than the servos could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial. If time performance requirements were tighter, special attention would need to be paid to the action selection process, which involves $|A|$ value function queries, each costing $n$ multiplications
 		
-	I have not dwelt on time efficiency since, even with software floating point operations, 16MHz permits a fair amount of computation. For this project, I was satisfied as long as actions could be selected more quickly than the servos could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial.\footnote{If time performance requirements were tighter, special attention would need to be paid to the action selection process, which involves $|A|$ value function queries, each costing $n$ multiplications.}
+		
+	\section{Representation}
+	
+	An approximation approach implemented on the microcontroller is constrained to 250 features or 1kb (less the incidental stack space required during the update step). It was not clear that this would be sufficient for good performance, but it was the only feasible approach. I implemented a semi-gradient one-step Sarsa agent using a linear function approximator.
+	
+	\subsection{Features}
+	
+	I used a simple discretization of the state space. The range of each joint is divided into 8\space\space20\degree\space sections. The two sets of section features along with a binary feature for the LED state are then gridded, resulting in 128 mutually exclusive binary features. 
+	
+	Because of the large number of actions, it was not feasible to maintain separate approximators per action. I used three action features: two characterizing the direction of each joint's movement, taking values in $\{0, 1, -1\}$, and one binary feature describing whether or not the LED is activated by the action. Clearly, three features is insufficient to encode the differences in value for all eighteen actions, however there was not enough memory to grid these features with the state features. Still, the total number of weights in the representation is well below the theoretical maximum number of weights for the microcontroller. A sparser gridding sized to occupy the remaining space could be beneficial, but I did not implement one.
+		
+.
 
 	%----------------------------------------------------------------------------------------
 	%	SECTION 3
@@ -151,15 +163,10 @@
 	
 
 	The agent learns for 50 episodes using $\alpha =$ 0.2, $\gamma =$ 0.99,  following an $\epsilon$-greedy policy with $\epsilon=$ 0.1. Then, the agent operates in an evaluation mode for 50 episodes with $\alpha=\epsilon=0.0$. During this period, episodes are limited to 200 steps in case the agent executes a policy that never reaches the goal. A small delay is used between action execution and sensing to allow the arm to settle. The photocell threshold is calibrated before every session to prevent spurious activations.
-	
-	\subsection{Features}
 
-	The value function approximator uses a mix of simple discretization and selected binary features. The range of each joint is divided into 20\degree\space sections. The two sets of section features along with a binary feature describing the LED state are then gridded, resulting in 128 mutually exclusive binary features. Two action features characterize the direction of each joint's movement, taking values in $\{0, 1, -1\}$, and a binary feature describes whether or not the LED is activated by the action.
-	
-	This representation is well below the theoretical maximum number of weights for the microcontroller. With more time, additional features could be added.
-	
+
 	\subsection{Action constraints}
-	To better support the state representation, I set the agent's movement increment to 20\degree. This ensures that the state resulting from any movement has a different feature vector than the previous state. This modification makes it easier for the agent to get experience useful for estimating the value of movement actions.
+	To better support the state representation, I set the agent's movement increment to 20\degree. This ensures that the state resulting from any movement has a different feature vector than the previous state. This change does limit the granularity of the agent's movements, but without it, the agent must randomly escape the 20\degree sections by repeatedly making smaller movements, which makes learning very expensive. 
 	
 	%----------------------------------------------------------------------------------------
 	%	SECTION 4
@@ -180,7 +187,7 @@
 
 	The agent learns and generalizes a fairly good policy within its first fifty steps. The evaluation period demonstrates that the learned policy performs well from arbitrary start positions. 
 	
-	The coarse representation is successful because the agent does not need to move the LED exactly onto the photocell before the threshold is met. As can be seen in the video\footnote{https://youtu.be/SCv1AomFDG0} though, the agent's policy is not optimal. Since it lacks features that describe the interaction of the joint position with the value of turning the LED on, the agent activates the LED unnecessarily. Compared to joint movement, correct LED activation is a less important problem, so it seems fair to trade features that would better capture the use of the LED for a finer representation of the joint positions.
+	The coarse representation is successful because the agent does not need to move the LED exactly onto the photocell before the threshold is met. As can be seen in the video\footnote{https://youtu.be/SCv1AomFDG0} though, the agent's policy is not optimal. Since it lacks features that describe the interaction of the joint position with the value of actions that turn the LED on, the agent activates the LED unnecessarily. Compared to joint movement, correct LED activation is a less important problem, so it seems fair to trade features that would better capture the use of the LED for a finer representation of the joint positions.
 	
 
 	%----------------------------------------------------------------------------------------
@@ -237,6 +244,7 @@
 			Assorted jumpers & & 3.00 & \\
 			Adhesives, project surface & & 4.00 & \\
 			\hline
+			
 		\end{tabular}
 	\end{center}
 	

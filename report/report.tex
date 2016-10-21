@@ -132,41 +132,37 @@
 				\State $a \gets \bm{\theta}^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phi_{t+1}$
 				\State $\bm{x} \gets \phi(S_{t}, A_{t})$ \Comment store $\phi_t$
 				\State $a \gets r + \gamma v - \bm{\theta}^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
-				\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now weight update
+				\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the weight update
 				\State \bm{$\theta} \gets \bm{\theta} + x$
 				\
 				\EndProcedure
 			\end{algorithmic}
 		\end{algorithm}
 		
-		I have not dwelt on time efficiency since, even with software floating point operations, 16MHz permits a fair amount of computation. For this project, I was satisfied as long as actions could be selected more quickly than the servos could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial. If time performance requirements were tighter, special attention would need to be paid to the action selection process, which involves $|A|$ value function queries, each costing $n$ multiplications
+	An approximation approach implemented on the microcontroller can use at most 1kb of RAM, or 250 features (less the incidental stack space required during the update step). It was not clear that this would be sufficient for good performance, but it was the only feasible approach. I implemented a semi-gradient one-step Sarsa agent using a linear function approximator.
+		
+	I have not dwelt on time efficiency since, even with software floating point operations, 16MHz permits a fair amount of computation. For this project, I was satisfied as long as actions could be selected more quickly than the servos could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial. If time performance requirements were tighter, special attention would need to be paid to the action selection process, which involves $|A|$ value function queries, each costing $n$ multiplications
 		
 		
-	\section{Representation}
-	
-	An approximation approach implemented on the microcontroller is constrained to 250 features or 1kb (less the incidental stack space required during the update step). It was not clear that this would be sufficient for good performance, but it was the only feasible approach. I implemented a semi-gradient one-step Sarsa agent using a linear function approximator.
-	
-	\subsection{Features}
-	
-	I used a simple discretization of the state space. The range of each joint is divided into 8\space\space20\degree\space sections. The two sets of section features along with a binary feature for the LED state are then gridded, resulting in 128 mutually exclusive binary features. 
-	
-	Because of the large number of actions, it was not feasible to maintain separate approximators per action. I used three action features: two characterizing the direction of each joint's movement, taking values in $\{0, 1, -1\}$, and one binary feature describing whether or not the LED is activated by the action. Clearly, three features is insufficient to encode the differences in value for all eighteen actions, however there was not enough memory to grid these features with the state features. Still, the total number of weights in the representation is well below the theoretical maximum number of weights for the microcontroller. A sparser gridding sized to occupy the remaining space could be beneficial, but I did not implement one.
-		
-.
 
 	%----------------------------------------------------------------------------------------
 	%	SECTION 3
 	%----------------------------------------------------------------------------------------
 	
-	
 	\section{Experimental Setup}
 	
 
 	The agent learns for 50 episodes using $\alpha =$ 0.2, $\gamma =$ 0.99,  following an $\epsilon$-greedy policy with $\epsilon=$ 0.1. Then, the agent operates in an evaluation mode for 50 episodes with $\alpha=\epsilon=0.0$. During this period, episodes are limited to 200 steps in case the agent executes a policy that never reaches the goal. A small delay is used between action execution and sensing to allow the arm to settle. The photocell threshold is calibrated before every session to prevent spurious activations.
+	
+	\subsection{Features}
+	
+	I used a simple discretization of the state space. The range of each joint was divided into 8\space\space20\degree\space sections. The two sets of section features along with a binary feature for the LED state were then gridded, resulting in 128 mutually exclusive binary features. 
+	
+	Because of the large number of actions, it was not feasible to maintain separate approximators per action, so I used three action features: two characterizing the direction of each joint's movement, taking values in $\{0, 1, -1\}$, and one binary feature describing whether or not the LED is activated by the action. Clearly, three features is insufficient to encode the differences in value for all eighteen actions across the state space, however there was not enough memory to grid these features with the state features. The total number of weights in the representation is still below the theoretical maximum number of weights for the microcontroller, so additional features could have been added with more time.
 
 
-	\subsection{Action constraints}
-	To better support the state representation, I set the agent's movement increment to 20\degree. This ensures that the state resulting from any movement has a different feature vector than the previous state. This change does limit the granularity of the agent's movements, but without it, the agent must randomly escape the 20\degree sections by repeatedly making smaller movements, which makes learning very expensive. 
+	\subsection{Action Constraints}
+	To better support the state representation, I set the agent's movement increment to 20\degree. This ensures that the state resulting from any movement has a different feature vector than the previous state. This change does limit the granularity of the agent's movements, but without it, the agent must randomly escape the 20\degree\space sections by repeatedly making smaller movements, which makes learning very expensive. 
 	
 	%----------------------------------------------------------------------------------------
 	%	SECTION 4

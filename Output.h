@@ -3,6 +3,7 @@
 #include "Pins.h"
 
 void chirp();
+void tripleChirp();
 void toggleLed();
 
 #endif

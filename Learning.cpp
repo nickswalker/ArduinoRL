@@ -11,8 +11,8 @@ extern ArmAction nextAction;
 extern float theta[];
 
 // A percentage (between 0 - 100)
-uint8_t epsilon = 10;
-float alpha = 0.2;
+uint8_t epsilon = DEFAULT_EPSILON;
+float alpha = DEFAULT_ALPHA;
 float gamma = 0.99;
 
 

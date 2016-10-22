@@ -58,7 +58,34 @@ void markEpisodeEnd() {
     Serial.println("***");
 }
 
+void markTrialStart() {
+    Serial.println("!!!");
+}
+
+bool checkForResetSignal(){
+    bool received = false;
+    if (Serial.available() == 2) {
+        // read the incoming byte:
+        uint8_t incomingByte = Serial.read();
+        if(incomingByte == 35) {
+            received = true;
+        }
+    }
+    return received;
+
+}
+
 void loop() { 
+    if (checkForResetSignal()) {
+        tripleChirp();
+        resetArmToRandomPosition();
+        cumulativeReward = 0.0;
+        currentEpisodeStep = 0;
+        currentEpisode = 0;
+        alpha = DEFAULT_ALPHA;
+        epsilon = DEFAULT_EPSILON;
+        markTrialStart();
+    }
     // `apply` populates currentState and previousState for us.
     apply(nextAction);
     //logArmState();
@@ -77,7 +104,6 @@ void loop() {
     logStepInformation();
 
     if (stateIsTerminal(currentState) || (EVALUATION_MODE && currentEpisodeStep > EVALUATION_MAX_STEPS)) {
-        logStepInformation();
         chirp();
         resetArmToRandomPosition();
         cumulativeReward = 0.0;

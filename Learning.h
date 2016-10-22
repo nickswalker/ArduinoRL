@@ -2,6 +2,9 @@
 #define LEARNING_H
 #include <stdint.h>
 
+#define DEFAULT_ALPHA 0.2
+#define DEFAULT_EPSILON 10
+
 typedef struct ArmState {
     uint8_t basePosition;
     uint8_t elbowPosition;

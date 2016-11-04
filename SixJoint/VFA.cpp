@@ -2,7 +2,7 @@
 #include "Learning.h"
 #include "Vector.h"
 
-float theta[NUM_FEATURES] = {0};
+float valueWeights[NUM_FEATURES] = {0};
 
 void extractFeatures(const ArmState &state, const ArmAction action, float phi[]) {
 

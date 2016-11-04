@@ -8,7 +8,7 @@ uint8_t lastCellOneReading = 0;
 uint8_t lastCellTwoReading = 0;
 uint8_t lastCellThreeReading = 0;
 
-int sense(){
+void sense(){
     delay(50);
     lastCellOneReading = analogRead(photoCellOnePin);
     lastCellTwoReading = analogRead(photoCellTwoPin);

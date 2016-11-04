@@ -34,7 +34,7 @@ void learnerUpdate(const ArmState &state, const ArmAction action, const ArmState
     // fill x with phi_t
     extractFeatures(state, action, x);
 
-    float error = r + gamma * v_t1 - dot(theta, x, NUM_FEATURES);
+    float error = r + rl_gamma * v_t1 - dot(theta, x, NUM_FEATURES);
 
     // Overwrite x with the final weight error
     multiply(alpha * error, x, NUM_FEATURES);

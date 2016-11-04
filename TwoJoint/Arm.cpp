@@ -58,6 +58,10 @@ void apply(ArmAction action) {
     int8_t elbowMovement = 0;
     switch (action) {
         // No need for StayStay cases. Default values handle that.
+        // Just here to silence compile warnings
+        case StayStayOn:
+        case StayStayOff:
+            break;
         case StayLeftOff:
         case StayLeftOn:
             elbowMovement -= JOINT_MOVE_AMOUNT;

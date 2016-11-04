@@ -1,4 +1,4 @@
-#include <Servo.h> 
+#include <Servo.h>
 #include "Pins.h"
 #include "Learning.h"
 #include "Arm.h"
@@ -17,22 +17,22 @@ extern uint8_t epsilon;
 extern const char spaceString[];
 extern const char cumulativeRewardString[];
 extern const char stepsString[];
- 
-Servo baseJoint;
-Servo elbowJoint;         
+
+Servo servos[] = {Servo(), Servo(), Servo(), Servo(), Servo(), Servo()};
+
 
 extern ArmState currentState;
 extern ArmState previousState;
 
-ArmAction nextAction = StayStayOff;
+ArmAction nextAction = {{0,0,0,0,0,0}};
 
 float lastReward = 0.0;
 
 int32_t cumulativeReward = 0.0;
 uint32_t currentEpisodeStep = 0;
 uint16_t currentEpisode = 0;
- 
-void setup() { 
+
+void setup() {
     randomSeed(analogRead(A3));
     pinMode(photoCellOnePin, INPUT);
     pinMode(photoCellTwoPin, INPUT);
@@ -40,12 +40,14 @@ void setup() {
     pinMode(ledPin, OUTPUT);
     pinMode(buzzerPin, OUTPUT);
     
-    baseJoint.attach(baseJointPin);
-    elbowJoint.attach(elbowJointPin); 
+    servos[0].attach(jointZeroPin);
+    servos[1].attach(jointOnePin);  // attaches the servo on pin 9 to the servo object
+    servos[2].attach(jointTwoPin);
+    servos[3].attach(jointThreePin);
+    servos[4].attach(jointFourPin);
+    servos[5].attach(jointFivePin);
 
-    // Uncomment if you intend to use the debugging print statements
-    Serial.begin(115200);
-} 
+}
 
 void logStepInformation() {
     Serial.print(currentEpisodeStep);
@@ -117,4 +119,3 @@ void loop() {
     }
 
 } 
-

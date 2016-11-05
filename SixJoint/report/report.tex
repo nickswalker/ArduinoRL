@@ -30,7 +30,7 @@
 %	DOCUMENT INFORMATION
 %----------------------------------------------------------------------------------------
 
-\title{Embedded Agent for Arm Control} % Title
+\title{Embedded Agent for Power-sensitive Arm Control} % Title
 
 \author{\textsc{Nick Walker}} % Author name
 
@@ -47,7 +47,7 @@
 
 \section{Motivation}
 
-Embedded implementations of reinforcement learning agents will be key to enabling expressive interactions with everyday objects. These agents, which may not always have access to off-board computing resources, must learn from real-world interactions using limited memory and clock cycles. To explore the issues facing embedded agents, I built a robot and solved a simple control problem using reinforcement learning.
+Embedded agents, which face memory and compute constraints, have applications in many areas, including space and consumer electronics. There are significant challenges in adapting reinforcement learning approaches for the constraints of embedded devices. In a previous programming assignment, I solved a simple task on a memory-constrained two-joint arm system using a temporal difference learning approach. This was successful because it was possible to achieve reasonable performance with even a coarse representation of the state and action spaces. In many problems however, acceptable performance can only be attained with finer representations. In this assignment, I increase the difficulty of the task while maintaining memory constraints and survey how a learning approach might be applied.
 
 
 %----------------------------------------------------------------------------------------
@@ -58,9 +58,9 @@ Embedded implementations of reinforcement learning agents will be key to enablin
 
 \subsection{Learning Platform}
 
-I based the platform on the Atmel ATmega328p, a cheap and widely available 8-bit microcontroller. It has 32kb of program memory, 2kb of SRAM and operates at 16MHz. It is used by popular hobbyist electronics boards like the Arduino Uno, and for this project, I used an Arduino Pro Mini. It does not have a floating point unit, though the Arduino runtime provides a software implementation that mimics 32-bit IEEE float.
+I based the platform on the Teensy 3.2, an ARM Cortex-M4 development board. The Teensy's particular M4 has 256kb of program memory, 64kb of SRAM and operates at 72MHz. It is 32-bit and has a floating point unit. Compared to popular 8-bit AVR microcontrollers, ARM chips are substantially more powerful, and not much more expensive. The Cortex line has seen substantial commercial use, so evaluating an embedded agent using the M4 provides useful insight what the constraints of real systems are.
 
-In order to provide a reasonably complex task for the agent, I decided to build a two degrees of freedom arm with an LED actuator. The arm's joints are SG90 micro-servos, each capable of 155$\degree$ of rotation. The base joint is fixed to a surface, and the elbow joint is mounted to the base with a pair of three-inch dowel rods. The elbow joint controls another rod which is tipped with an LED. The motors are connected such that the middle of their rotation ranges align.
+In order to provide a challenging task for the agent, I built a six degree of freedom arm. The arm's joints are MTR955 servos, each capable of 170$\degree$ of rotation, though some joints have less range of motion to physical constraints.
 
 
 \begin{figure}
@@ -74,6 +74,10 @@ In order to provide a reasonably complex task for the agent, I decided to build 
 
 \subsection{Problem}
 
+Motors consume a substantial amount of power.
+
+Additionally, power consumption is an interesting proxy for joint state. I did not use feedback servos, so it is not possible to know whether a joint has been able to execute its movement. The agent must assume that all actions get executed within some fixed window after they are issued. If the arm enters a bad configuration, e.g. hitting an immovable object, power consumption will spike as the servo controller applies more torque.
+
 The agent must move all of its joints into a target pose, using as little energy as possible. A sample of the instantaneous current usage is taken during each action execution.
 
 \[ r(s,a,s') =  \left\{
@@ -85,6 +89,10 @@ The agent must move all of its joints into a target pose, using as little energy
 
 
 \subsection{Learning Approaches}
+
+\subsection{Value Function?}
+
+The problem suggests The servo control library used for this project allows motor targets to be set with single-degree precision, so a single joint can have integer positions in  $[0\degree, 155\degree]$.
 
 \subsubsection{Policy Gradient}
 
@@ -106,7 +114,7 @@ Approximation allows tight control of the amount of memory being used to represe
 	\gamma \hat{q}(S_{t+1}, A_{t+1}\, \bm{\theta}_t) 
 	- \hat{q}(S_t, A_t, \bm{\theta}_t)
 \Big]
-\Delta\hat{q}(S_t, A_t, \bm{\theta}_t)\tag{1}
+\nabla\hat{q}(S_t, A_t, \bm{\theta}_t)\tag{1}
 \end{equation}
 
 And in the linear case:
@@ -116,8 +124,8 @@ And in the linear case:
 	\bm{\theta}_t + 
 		\alpha \Big[
 			R_{t+1} + \gamma\, \bm{\theta}_t^\top\bm{\phi}_{t+1} \space
-			- \bm{\theta}_t^\top\bm{\phi}_t
-		\Big]\bm{\phi}_t\tag{2}
+			- \bm{\theta}_t^\top\bm{\bm{\phi}}_t
+		\Big]\bm{\bm{\phi}}_t\tag{2}
 \end{equation}
 
 It is possible to implement the update using only $n$ additional space, where $n$ is the number of weights, but this is easy to do incorrectly. If the action selection step is placed after the memory allocation, the stack will consume $2n$ memory; maximizing the value function over possible next states requires an additional $n$ stack space.
@@ -130,9 +138,9 @@ It is possible to implement the update using only $n$ additional space, where $n
 			\State $A_{t+1} \gets $ choose action from $S_{t+1}$ according to policy
 			\State Allocate \bm{$x$} to be a vector the size of \bm{$\theta$}, and floats $r$ and $a$
 			\State $r\gets r(S_t$, $A_t$, $S_{t+1}$)
-			\State $\bm{x} \gets \phi(S_{t+1}, A_{t+1})$ \Comment store $\phi_{t+1}$
-			\State $a \gets \bm{\theta}^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phi_{t+1}$
-			\State $\bm{x} \gets \phi(S_{t}, A_{t})$ \Comment store $\phi_t$
+			\State $\bm{x} \gets \bm{\phi}(S_{t+1}, A_{t+1})$ \Comment store $\bm{\phi}_{t+1}$
+			\State $a \gets \bm{\theta}^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\bm{\phi}_{t+1}$
+			\State $\bm{x} \gets \bm{\phi}(S_{t}, A_{t})$ \Comment store $\bm{\phi}_t$
 			\State $a \gets r + \gamma v - \bm{\theta}^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
 			\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the weight update
 			\State \bm{$\theta} \gets \bm{\theta} + x$
@@ -259,45 +267,54 @@ I have demonstrated that it is possible to implement an embedded agent that achi
 \section{Appendix C: Gradient}
 
 
-
+$\phi(s)$ is abbreviated $\bm{\phi}$
 \begin{gather*}
-\pi (a | s, \theta) =  \frac{1}{\sigma(s, \theta)\sqrt{2\pi}}\exp\bigg(- \frac{(a - \mu(s, \theta))^2}{2\sigma(s, \theta)}\bigg)\\
-\theta = [\theta^\mu, \theta^\sigma] \\
-\mu(s, \theta) = \theta^{\mu\top}\phi\\
-\sigma(s, \theta) = \exp(\theta^{\sigma\top}\phi)\\
+\pi (a | s, \bm{\theta}) =  \frac{1}{\sigma(s, \bm{\theta})\sqrt{2\pi}}\exp\bigg({-\frac{(a - \mu(s, {\bm{\theta}}))^2}{2\sigma(s, \bm{\theta})})}\bigg)\\
+\bm{\theta} = [\bm{\theta}^\mu, \bm{\theta}^\sigma] \\
+\mu(s, \bm{\theta}) = \bm{\theta}^{\mu\top}\bm{\phi}\\
+\sigma(s, \bm{\theta}) = \exp(\bm{\theta}^{\sigma\top}\bm{\phi})\\
 \exp(x) = e^x\\
 \end{gather*}
 \begin{align*}
-\Delta_\theta \pi (a | s, \theta) &= \Delta_\theta \bigg[ \frac{1}{\exp(\theta^
-	{\sigma\top}\phi)\sqrt{2\pi}}\exp\bigg(- \frac{(a - \theta^{\mu\top}\phi)^2}{2\exp(\theta^{\sigma\top}\phi)}\bigg)\bigg]\\
-&= \Delta_\theta[\text{AB}] \\
-&= \Delta_{\theta^\mu}[\text{AB}] + \Delta_{\theta^\sigma}[\text{AB}]  \quad\text{(by definition of theta)}\\
-&= \Delta_{\theta^\mu}\text{A}\text{B} + \text{A}\Delta_{\theta^\mu}\text{B} + \Delta_{\theta^\sigma}\text{A}\text{B} + \text{A}\Delta_{\theta^\sigma}\text{B}  \quad\text{(by product rule)}\\ \\
+\nabla_{\bm{\theta}} \pi (a | s, \bm{\theta}) &= \nabla_{\bm{\theta}} \bigg[ \frac{1}{\exp(\bm{\theta}^
+	{\sigma\top}\bm{\phi})\sqrt{2\pi}}\exp\bigg(- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg)\bigg]\\
+&= \nabla_{\bm{\theta}}[\text{AB}] \\
+&= \big[\nabla_{\bm{\theta}^\mu}[\text{AB}],\quad\nabla_{\bm{\theta}^\sigma}[\text{AB}]\big]  \quad\text{(by definition of theta)}\\
+&= \big[\nabla_{\bm{\theta}^\mu}\text{A}\text{B} + \text{A}\nabla_{\bm{\theta}^\mu}\text{B} ,\quad \nabla_{\bm{\theta}^\sigma}\text{A}\text{B} + \text{A}\nabla_{\bm{\theta}^\sigma}\text{B}\big]  \quad\text{(by product rule)}\\
+&= \big[0 + \text{A}\nabla_{\bm{\theta}^\mu}\text{B} ,\quad \nabla_{\bm{\theta}^\sigma}\text{A}\text{B} + \text{A}\nabla_{\bm{\theta}^\sigma}\text{B}\big] \\
+&= \big[\text{B} \frac{{-\bm{\phi}}(a - \bm{\theta}^{\mu\top}\bm{\phi}) }{\sqrt{2\pi}\exp(\bm{\theta}^{\sigma\top}\bm{\phi})} ,\quad -\frac{\exp(-\bm{\theta}^
+	{\sigma\top}\bm{\phi})}{\sqrt{2\pi}} (\bm{\phi})\text{B} + \text{A}\text{B}\frac{{-\phi} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\big] \\
+ \\
 \end{align*}
-\hrule
 \subsection{Gradient with respect to $\theta^\mu$}
 \begin{align*}
-\Delta_{\theta^\mu} \text{A} &= \Delta_{\theta^\mu} \bigg[\frac{1}{\exp(\theta^
-	{\sigma\top}\phi)\sqrt{2\pi}}\bigg]\\
+\nabla_{\bm{\theta}^\mu} \text{A} &= \nabla_{\bm{\theta}^\mu} \bigg[\frac{1}{\exp(\bm{\theta}^
+	{\sigma\top}\bm{\phi})\sqrt{2\pi}}\bigg]\\
 &=  0\\
 \end{align*}
 \begin{align*}
-\Delta_{\theta^\mu} \text{B} &= \Delta_{\theta^\mu} \bigg[ \exp\bigg(- \frac{(a - \theta^{\mu\top}\phi)^2}{2\exp(\theta^{\sigma\top}\phi)}\bigg)\bigg]\\
-&= \text{B} \Delta_{\theta^\mu} \bigg[- \frac{(a - \theta^{\mu\top}\phi)^2}{2\exp(\theta^{\sigma\top}\phi)}\bigg]\\
-&= \text{B} \Delta_{\theta^\mu} \bigg[-\frac{1}{2} (a - \theta^{\mu\top}\phi)^2\exp(\theta^{\sigma\top}\phi)^{-1}\bigg]\\
-&= \text{B} \exp(\theta^{\sigma\top}\phi)^{-1} \Delta_{\theta^\mu} \bigg[-\frac{1}{2} (a - \theta^{\mu\top}\phi)^2\bigg]\\
-&= \text{B} \exp(\theta^{\sigma\top}\phi)^{-1} -(a - \theta^{\mu\top}\phi)\Delta_{\theta^\mu} \bigg[a - \theta^{\mu\top}\phi\bigg]\\
-&= \text{B} \exp(\theta^{\sigma\top}\phi)^{-1} (a - \theta^{\mu\top}\phi)\Delta_{\theta^\mu}  {-\phi}\\
+\nabla_{\bm{\theta}^\mu} \text{B} &= \nabla_{\bm{\theta}^\mu} \bigg[ \exp\bigg(- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg)\bigg]\\
+&= \text{B} \nabla_{\bm{\theta}^\mu} \bigg[- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg]\\
+&= \text{B} \nabla_{\bm{\theta}^\mu} \bigg[-\frac{1}{2} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1}\bigg]\\
+&= \text{B} \exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1} \nabla_{\bm{\theta}^\mu} \bigg[-\frac{1}{2} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2\bigg]\quad\text{(by product rule)}\\
+&= {-\text{B}} \exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1} (a - \bm{\theta}^{\mu\top}\bm{\phi})\nabla_{\bm{\theta}^\mu} \bigg[a - \bm{\theta}^{\mu\top}\bm{\phi}\bigg]\\
+&= \text{B}\frac{{-\bm{\phi}}(a - \bm{\theta}^{\mu\top}\bm{\phi}) }{\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\\
 \end{align*}
+\clearpage
 \subsection{Gradient with respect to $\theta^\sigma$}
 \begin{align*}
-\Delta_{\theta^\sigma} \text{A} &= \Delta_{\theta^\sigma} \bigg[\frac{1}{\exp(\theta^
-	{\sigma\top}\phi)\sqrt{2\pi}}\bigg]\\
-&=  -\frac{\exp(-\theta^
-	{\sigma\top}\phi)}{\sqrt{2\pi}}\\
+	\nabla_{\bm{\theta}^\sigma} \text{A} &= \nabla_{\bm{\theta}^\sigma} \bigg[\frac{1}{\exp(\bm{\theta}^
+		{\sigma\top}\bm{\phi})\sqrt{2\pi}}\bigg]\\
+&= \nabla_{\bm{\theta}^\sigma} \bigg[\frac{\exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1}}{\sqrt{2\pi}}\bigg]\\
+&=  -\frac{\exp(-\bm{\theta}^
+	{\sigma\top}\bm{\phi})}{\sqrt{2\pi}} (\bm{\phi})\\
 \end{align*}
+
 \begin{align*}
-\Delta_{\theta^\sigma} \text{B} &= \Delta_{\theta^\sigma} \bigg[ \exp\bigg(- \frac{(a - \theta^{\mu\top}\phi)^2}{2\exp(\theta^{\sigma\top}\phi)}\bigg)\bigg]\\
+\nabla_{\bm{\theta}^\sigma} \text{B} &= \nabla_{\bm{\theta}^\sigma} \bigg[ \exp\bigg(- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg)\bigg]\\
+&= \text{B}\nabla_{\bm{\theta}^\sigma} \bigg[ - \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})})\bigg]\\
+&= \text{B}\nabla_{\bm{\theta}^\sigma} \bigg[ - \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{1}\frac{1}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg]\\
+&= \text{B}\frac{{-\phi} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\\
 \end{align*}
 
 

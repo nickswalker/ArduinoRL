@@ -15,8 +15,8 @@
 \usepackage{mathtools} 
 \usepackage{algorithm}
 \usepackage{algpseudocode}
-\usepackage{fancyhdr}
 \usepackage{booktabs}
+\usepackage{caption}
 
 \usepackage{amsmath,amsfonts,amssymb}
 
@@ -24,15 +24,20 @@
 
 \renewcommand{\labelenumi}{\alph{enumi}.} % Make numbering in the enumerate environment by letter rather than number (e.g. section 6)
 
+\newcommand{\grad}[1]{\nabla_{#1}}
+\newcommand{\gradv}[1]{\nabla_{\bm{#1}}}
+\newcommand{\thetab}{\bm{\theta}}
+\newcommand{\phib}{\bm{\phi}}
+
 \long\def\/*#1*/{}
 
 %----------------------------------------------------------------------------------------
 %	DOCUMENT INFORMATION
 %----------------------------------------------------------------------------------------
 
-\title{Embedded Agent for Power-sensitive Arm Control} % Title
+\title{Embedded Agent for Execution-efficient Power-optimal Joint Control}
 
-\author{\textsc{Nick Walker}} % Author name
+\author{\textsc{Nick Walker}}
 
 \date{CS394R Fall 2016} % Date for the report
 
@@ -40,14 +45,13 @@
 	
 \maketitle % Insert the title, author and date
 
-
 %----------------------------------------------------------------------------------------
 %	SECTION 1
 %----------------------------------------------------------------------------------------
 
 \section{Motivation}
 
-Embedded agents, which face memory and compute constraints, have applications in many areas, including space and consumer electronics. There are significant challenges in adapting reinforcement learning approaches for the constraints of embedded devices. In a previous programming assignment, I solved a simple task on a memory-constrained two-joint arm system using a temporal difference learning approach. This was successful because it was possible to achieve reasonable performance with even a coarse representation of the state and action spaces. In many problems however, acceptable performance can only be attained with finer representations. In this assignment, I increase the difficulty of the task while maintaining memory constraints and survey how a learning approach might be applied.
+Embedded agents, which face memory and compute constraints, have applications in many areas, including space and consumer electronics. In a previous programming assignment, I solved a simple task on a memory-constrained two-joint arm system using a temporal difference learning approach, which was possible because even a coarse representation of the state and action spaces was sufficient to achieve good performance. In many problems however, we would like to achieve higher, near-optimal levels of performance. In this report, I investigate a complex joint control task, one such problem where near-optimal behavior is highly desirable and examine how a learning approach might be applied.
 
 
 %----------------------------------------------------------------------------------------
@@ -58,25 +62,50 @@ Embedded agents, which face memory and compute constraints, have applications in
 
 \subsection{Learning Platform}
 
-I based the platform on the Teensy 3.2, an ARM Cortex-M4 development board. The Teensy's particular M4 has 256kb of program memory, 64kb of SRAM and operates at 72MHz. It is 32-bit and has a floating point unit. Compared to popular 8-bit AVR microcontrollers, ARM chips are substantially more powerful, and not much more expensive. The Cortex line has seen substantial commercial use, so evaluating an embedded agent using the M4 provides useful insight what the constraints of real systems are.
+I based the platform on the Teensy 3.2, an ARM Cortex-M4 development board. Compared to the popular AVR microcontrollers, ARM chips are substantially more powerful, and not much more expensive. Though both chips lack a floating point unit, ARM cores have an emulation advantage due to the their higher clock speed and native 32-bit operation capabilities. The Cortex line has seen substantial commercial use, so evaluating an embedded agent using the M4 provides useful insight into the constraints of real systems are.
+
+\begin{center}
+	\begin{tabular}{ l l l}
+		& AtMega328p & Cortex-M4  \\ \midrule
+		Instruction set & AVR & ARMv7-M\\
+		Integer width & 8 bits & 32 bits\\
+		SRAM & 2kb & 32kb\\
+		Program memory & 32kb & 256kb\\
+		Clock Speed & 16Mhz & 72Mhz\\ 
+		FPU & No & No
+		
+	\end{tabular}
+\end{center}
 
 In order to provide a challenging task for the agent, I built a six degree of freedom arm. The arm's joints are MTR955 servos, each capable of 170$\degree$ of rotation, though some joints have less range of motion to physical constraints.
 
+\begin{center}
+	\begin{tabular}{ l l l}
+		Joint & Rotation range ($\deg$)  \\ \midrule
+		0 & 160 \\
+		1 & 120 \\
+		2 & 50 \\
+		3 & 50 \\
+		4 & 50\\ 
+		5 & 30
+		
+	\end{tabular}
+\end{center}
 
 \begin{figure}
 	\centering
 	%\includegraphics[width=10cm]{../photos/eagle_small.jpg}
 	%\includegraphics[width=10cm]{../photos/arm_detail_small.jpg}
-	\caption{Top: The learning platform.}
+	\caption{Top: The learning platform. Five joints control the articulation of the arm, while the sixth opens and closes the grasper.}
 	\label{fig:platform}
 \end{figure}
 
 
 \subsection{Problem}
 
-Motors consume a substantial amount of power.
+Motors consume a substantial amount of power, so it is important for a battery-powered mobile system to have an efficient motor usage policy. There are two components to an efficient motor policy. \textit{Utilization efficiency}, making movements only as necessary, and \textit{execution efficiency}, using joints to actuate movements as efficiently as possible. Speed is not the only component of execution efficiency. Motors consume power proportional to the torque they apply, so in some systems, there may ways of using properties of the environment to transition between joint poses that require less torque. In the arm system for instance, a policy that moves in such a way that gravity pulls joints towards the target configuration may be more power efficient, even if it takes longer than a direct transition. With a good model of the system, it is possible to engineer a power-optimal execution policy, however such models may be expensive or impossible to obtain. Further, because the model will be imperfect, small differences, like the precise angles of the joints or the quality of the motors may change the optimal policy. For these reasons, a learning approach, which can adapt to the idiosyncrasies of an individual platform, is interesting.
 
-Additionally, power consumption is an interesting proxy for joint state. I did not use feedback servos, so it is not possible to know whether a joint has been able to execute its movement. The agent must assume that all actions get executed within some fixed window after they are issued. If the arm enters a bad configuration, e.g. hitting an immovable object, power consumption will spike as the servo controller applies more torque.
+Additionally, power consumption is an interesting proxy for joint state. I did not use feedback servos, so the agent must assume that all actions get executed within some fixed window after they are issued. If the arm enters a bad configuration, e.g. hitting an immovable object, power consumption will spike as the servo controller applies more torque. Penalizing current draw indirectly discourages dangerous configurations.
 
 The agent must move all of its joints into a target pose, using as little energy as possible. A sample of the instantaneous current usage is taken during each action execution.
 
@@ -90,42 +119,56 @@ The agent must move all of its joints into a target pose, using as little energy
 
 \subsection{Learning Approaches}
 
-\subsection{Value Function?}
+\subsection{Value Function Based?}
 
-The problem suggests The servo control library used for this project allows motor targets to be set with single-degree precision, so a single joint can have integer positions in  $[0\degree, 155\degree]$.
+The servo controller library used for this project allows joint angles to be specified with single degree precision. The space of possible joint configurations and actions is large enough to be essentially continuous. In my previous project, I coarse coded the states and restricted the action set to make the problem fit within the system's memory constraints, but this made it impossible for the agent to represent the optimal policy. If we would like to achieve better than minimally-functional policies, we need to use a more flexible representation, but the scale of the problem means that .
 
-\subsubsection{Policy Gradient}
+\subsection{Policy Gradient}
 
+For this task, policies are much easier to model and optimize over than value functions. This suggests that a policy gradient approach may be appropriate. The book provides one possible policy parameterization for a continuous state-action problem,
 
+\begin{gather*}
+	\pi (a | s, \thetab) =  \frac{1}{\sigma(s, \thetab)\sqrt{2\pi}}\exp\bigg({-\frac{(a - \mu(s, {\thetab}))^2}{2\sigma(s, \thetab)})}\bigg)\\
+	\thetab = [\thetab^\mu, \thetab^\sigma] \\
+	\mu(s, \thetab) = \thetab^{\mu\top}\phib\\
+	\sigma(s, \thetab) = \exp(\thetab^{\sigma\top}\phib)\\
+	\exp(x) = e^x\\
+\end{gather*}
 
-The servo control library used for this project allows motor targets to be set with single-degree precision, so a single joint can have integer positions in  $[0\degree, 155\degree]$. For each configuration, the LED can be either on or off, so there are a total of 48050 states. At a given time step, the agent may choose to keep a joint fixed, move it left, or move it right and it can choose to activate or deactivate the LED. Assuming we restrict the agent to movements of unit magnitude, this means there are eighteen actions.
+where $a$ is a scalar real-valued action. Because the agent has to pick six joint movements at each time step, this representation can simply be instantiated once for each joint, and each weight matrix can be learned independently. This is not ideal because the distribution of movements for a single joint should be influenced by the distributions of the other joints. A better policy representation might be the multivariate normal distribution,
 
-A state-action value table based on this representation, assuming 4 byte floats, would occupy more than 4 megabytes of memory. Due to the spread of the light of the LED, it may be feasible to reduce the fidelity of the joint state representation and still achieve good performance, and because the optimal policy will likely always elect to move a joint, we may be able to remove actions which do not move a joint with little adverse effect. Even then, the microcontroller could only theoretically fit 10\% of all state action pairs (less without careful optimization, as the stack needs to live in memory as well). A tabular approach is not feasible due to the system's memory constraints.
+\begin{gather*}
+	\pi (\bm{a} | s, \thetab) =  \frac{1}{\sqrt{(2\pi)^k|\bm{\Sigma}(s, \thetab)|}} \exp\bigg(-(\bm{a} - \bm{\mu}(s, {\thetab}))^\top \bm{\Sigma}(s, \thetab)^{-1}{(\bm{x} - \bm{\mu}(s, \thetab))}\bigg)\\
+		\bm{\Sigma}(s, \thetab) =\quad?\\
+		\bm{\mu}(s, {\thetab}) =\quad?\\
+\end{gather*}
+where $\bm{\Sigma}$ is the covariance matrix and $|\bm{\Sigma}|$ is its determinant. However, it is not clear how best to parameterize a representation of $\bm{\mu}$ and $\bm{\Sigma}$, and the derivation of its gradient is more complicated. For this project, I will use six independent normal policies.
+
 
 \subsubsection{Function Approximation}
 
 Approximation allows tight control of the amount of memory being used to represent the value function. Because of the complex update step however, only at most half of the memory can be used for storing weights. Even then, the update step must be implemented carefully to control the stack size. Consider the episodic semi-gradient one-step Sarsa update:
 
 \begin{equation}\label{eqn:update}
-\bm{\theta}_{t+1} = 
-\bm{\theta}_t + 
+\thetab_{t+1} = 
+\thetab_t + 
 \alpha \Big[
 	R_{t+1} + 
-	\gamma \hat{q}(S_{t+1}, A_{t+1}\, \bm{\theta}_t) 
-	- \hat{q}(S_t, A_t, \bm{\theta}_t)
+	\gamma \hat{q}(S_{t+1}, A_{t+1}\, \thetab_t) 
+	- \hat{q}(S_t, A_t, \thetab_t)
 \Big]
-\nabla\hat{q}(S_t, A_t, \bm{\theta}_t)\tag{1}
+\nabla\hat{q}(S_t, A_t, \thetab_t)\tag{1}
 \end{equation}
 
 And in the linear case:
 
 \begin{equation}\label{eqn:linear_update}
-	\bm{\theta}_{t+1} = 
-	\bm{\theta}_t + 
+	\thetab_{t+1} = 
+	\thetab_t + 
 		\alpha \Big[
-			R_{t+1} + \gamma\, \bm{\theta}_t^\top\bm{\phi}_{t+1} \space
-			- \bm{\theta}_t^\top\bm{\bm{\phi}}_t
-		\Big]\bm{\bm{\phi}}_t\tag{2}
+			R_{t+1} + \gamma\, \thetab_t^\top\phib_{t+1} \space
+			- \thetab_t^\top\bm{\phib}_t
+		\Big]\bm{\phib}_t\tag{2}
 \end{equation}
 
 It is possible to implement the update using only $n$ additional space, where $n$ is the number of weights, but this is easy to do incorrectly. If the action selection step is placed after the memory allocation, the stack will consume $2n$ memory; maximizing the value function over possible next states requires an additional $n$ stack space.
@@ -138,12 +181,12 @@ It is possible to implement the update using only $n$ additional space, where $n
 			\State $A_{t+1} \gets $ choose action from $S_{t+1}$ according to policy
 			\State Allocate \bm{$x$} to be a vector the size of \bm{$\theta$}, and floats $r$ and $a$
 			\State $r\gets r(S_t$, $A_t$, $S_{t+1}$)
-			\State $\bm{x} \gets \bm{\phi}(S_{t+1}, A_{t+1})$ \Comment store $\bm{\phi}_{t+1}$
-			\State $a \gets \bm{\theta}^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\bm{\phi}_{t+1}$
-			\State $\bm{x} \gets \bm{\phi}(S_{t}, A_{t})$ \Comment store $\bm{\phi}_t$
-			\State $a \gets r + \gamma v - \bm{\theta}^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
+			\State $\bm{x} \gets \phib(S_{t+1}, A_{t+1})$ \Comment store $\phib_{t+1}$
+			\State $a \gets \thetab^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phib_{t+1}$
+			\State $\bm{x} \gets \phib(S_{t}, A_{t})$ \Comment store $\phib_t$
+			\State $a \gets r + \gamma v - \thetab^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
 			\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the weight update
-			\State \bm{$\theta} \gets \bm{\theta} + x$
+			\State \bm{$\theta} \gets \thetab + x$
 			\
 			\EndProcedure
 		\end{algorithmic}
@@ -253,9 +296,8 @@ I have demonstrated that it is possible to implement an embedded agent that achi
 		Teensy 3.2 & 1 & 18.00 &  \\ 
 		MTR955R servo & 6 & 4.00 & Any standard servo.\\ 
 		Arm kit & 1 & 30.00 & \\
-		Current sensor & 1 & 4.00 & \\
+		ASC112 current sensor & 1 & 4.00 & Or similar\\
 		5v 5.0A power supply & 1 & 16.00 & If variable supply unavailable. \\ 
-		330\ohm\space resistor & 4 & 0.01 \\
 		Breadboard & 1 & 4.00 & \\
 		Assorted jumpers & & 3.00 & \\
 		Adhesives, project surface & & 4.00 & \\
@@ -264,57 +306,55 @@ I have demonstrated that it is possible to implement an embedded agent that achi
 	\end{tabular}
 \end{center}
 	
-\section{Appendix C: Gradient}
+\section{Appendix C: Derivation of the Gradient}
 
-
-$\phi(s)$ is abbreviated $\bm{\phi}$
+The book does not provide the gradient for the parameterized normal policy and I was not able to quickly find it elsewhere. Its derivation is included as an exercise. $\phi(s)$ is abbreviated $\phib$
 \begin{gather*}
-\pi (a | s, \bm{\theta}) =  \frac{1}{\sigma(s, \bm{\theta})\sqrt{2\pi}}\exp\bigg({-\frac{(a - \mu(s, {\bm{\theta}}))^2}{2\sigma(s, \bm{\theta})})}\bigg)\\
-\bm{\theta} = [\bm{\theta}^\mu, \bm{\theta}^\sigma] \\
-\mu(s, \bm{\theta}) = \bm{\theta}^{\mu\top}\bm{\phi}\\
-\sigma(s, \bm{\theta}) = \exp(\bm{\theta}^{\sigma\top}\bm{\phi})\\
+\pi (a | s, \thetab) =  \frac{1}{\sigma(s, \thetab)\sqrt{2\pi}}\exp\bigg({-\frac{(a - \mu(s, {\thetab}))^2}{2\sigma(s, \thetab)})}\bigg)\\
+\thetab = [\thetab^\mu, \thetab^\sigma] \\
+\mu(s, \thetab) = \thetab^{\mu\top}\phib\\
+\sigma(s, \thetab) = \exp(\thetab^{\sigma\top}\phib)\\
 \exp(x) = e^x\\
 \end{gather*}
 \begin{align*}
-\nabla_{\bm{\theta}} \pi (a | s, \bm{\theta}) &= \nabla_{\bm{\theta}} \bigg[ \frac{1}{\exp(\bm{\theta}^
-	{\sigma\top}\bm{\phi})\sqrt{2\pi}}\exp\bigg(- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg)\bigg]\\
-&= \nabla_{\bm{\theta}}[\text{AB}] \\
-&= \big[\nabla_{\bm{\theta}^\mu}[\text{AB}],\quad\nabla_{\bm{\theta}^\sigma}[\text{AB}]\big]  \quad\text{(by definition of theta)}\\
-&= \big[\nabla_{\bm{\theta}^\mu}\text{A}\text{B} + \text{A}\nabla_{\bm{\theta}^\mu}\text{B} ,\quad \nabla_{\bm{\theta}^\sigma}\text{A}\text{B} + \text{A}\nabla_{\bm{\theta}^\sigma}\text{B}\big]  \quad\text{(by product rule)}\\
-&= \big[0 + \text{A}\nabla_{\bm{\theta}^\mu}\text{B} ,\quad \nabla_{\bm{\theta}^\sigma}\text{A}\text{B} + \text{A}\nabla_{\bm{\theta}^\sigma}\text{B}\big] \\
-&= \big[\text{B} \frac{{-\bm{\phi}}(a - \bm{\theta}^{\mu\top}\bm{\phi}) }{\sqrt{2\pi}\exp(\bm{\theta}^{\sigma\top}\bm{\phi})} ,\quad -\frac{\exp(-\bm{\theta}^
-	{\sigma\top}\bm{\phi})}{\sqrt{2\pi}} (\bm{\phi})\text{B} + \text{A}\text{B}\frac{{-\phi} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\big] \\
+\grad{\thetab} \log\pi (a | s, \thetab) &= \grad{\thetab} \log \bigg[ \frac{1}{\exp(\thetab^
+	{\sigma\top}\phib)\sqrt{2\pi}}\exp\bigg(- \frac{(a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\bigg)\bigg]\\
+&= \grad{\thetab}\log[\text{AB}] \\
+&= \big[\grad{\thetab^\mu} \log[\text{AB}],\quad\grad{\thetab^\sigma}\log[\text{AB}]\big]  \quad\text{(by definition of theta)}\\
+&= \big[\grad{\thetab^\mu}[\log\text{A}]+ \grad{\thetab^\mu}[\log\text{B}],\quad \grad{\thetab^\sigma}[\log\text{A}]+ \grad{\thetab^\sigma}[\log\text{B}]\big]  \quad\text{(by log rules)}\\
+&= \bigg[\frac{{-\phib} (a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}  ,\quad {-\phib} + \frac{{\phib} (a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)} \bigg] \\
  \\
 \end{align*}
-\subsection{Gradient with respect to $\theta^\mu$}
+\subsection{Gradient with respect to $\bm{\theta}^\mu$}
 \begin{align*}
-\nabla_{\bm{\theta}^\mu} \text{A} &= \nabla_{\bm{\theta}^\mu} \bigg[\frac{1}{\exp(\bm{\theta}^
-	{\sigma\top}\bm{\phi})\sqrt{2\pi}}\bigg]\\
+\grad{\thetab^\mu} \log\text{A} &= \grad{\thetab^\mu} \log \bigg[\frac{1}{\exp(\thetab^
+	{\sigma\top}\phib)\sqrt{2\pi}}\bigg]\\
 &=  0\\
 \end{align*}
 \begin{align*}
-\nabla_{\bm{\theta}^\mu} \text{B} &= \nabla_{\bm{\theta}^\mu} \bigg[ \exp\bigg(- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg)\bigg]\\
-&= \text{B} \nabla_{\bm{\theta}^\mu} \bigg[- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg]\\
-&= \text{B} \nabla_{\bm{\theta}^\mu} \bigg[-\frac{1}{2} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1}\bigg]\\
-&= \text{B} \exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1} \nabla_{\bm{\theta}^\mu} \bigg[-\frac{1}{2} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2\bigg]\quad\text{(by product rule)}\\
-&= {-\text{B}} \exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1} (a - \bm{\theta}^{\mu\top}\bm{\phi})\nabla_{\bm{\theta}^\mu} \bigg[a - \bm{\theta}^{\mu\top}\bm{\phi}\bigg]\\
-&= \text{B}\frac{{-\bm{\phi}}(a - \bm{\theta}^{\mu\top}\bm{\phi}) }{\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\\
+\grad{\thetab^\mu} \log \text{B} &= \grad{\thetab^\mu} \log \bigg[ \exp\bigg(- \frac{(a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\bigg)\bigg]\\
+&= \grad{\thetab^\mu} \bigg[-\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
+&= \grad{\thetab^\mu} \bigg[-\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2\bigg] \exp(\thetab^{\sigma\top}\phib)^{-1} + -\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2 \grad{\thetab^\mu} \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
+&= \grad{\thetab^\mu} \bigg[-\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2\bigg] \exp(\thetab^{\sigma\top}\phib)^{-1} + \quad 0\\
+&= -(a - \thetab^{\mu\top}\phib)\grad{\thetab^\mu} \bigg[a - \thetab^{\mu\top}\phib\bigg] \exp(\thetab^{\sigma\top}\phib)^{-1} \\
+&= \frac{{\phib}(a - \thetab^{\mu\top}\phib) }{\exp(\thetab^{\sigma\top}\phib)}\\
 \end{align*}
 \clearpage
-\subsection{Gradient with respect to $\theta^\sigma$}
+\subsection{Gradient with respect to $\bm{\theta}^\sigma$}
 \begin{align*}
-	\nabla_{\bm{\theta}^\sigma} \text{A} &= \nabla_{\bm{\theta}^\sigma} \bigg[\frac{1}{\exp(\bm{\theta}^
-		{\sigma\top}\bm{\phi})\sqrt{2\pi}}\bigg]\\
-&= \nabla_{\bm{\theta}^\sigma} \bigg[\frac{\exp(\bm{\theta}^{\sigma\top}\bm{\phi})^{-1}}{\sqrt{2\pi}}\bigg]\\
-&=  -\frac{\exp(-\bm{\theta}^
-	{\sigma\top}\bm{\phi})}{\sqrt{2\pi}} (\bm{\phi})\\
+	\grad{\thetab^\sigma} \log \text{A} &= \grad{\thetab^\sigma} \log \bigg[\frac{1}{\exp(\thetab^
+		{\sigma\top}\phib)\sqrt{2\pi}}\bigg]\\
+&= \grad{\thetab^\sigma} \log \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1} \frac{1}{\sqrt{2\pi}}\bigg]\\
+&= \grad{\thetab^\sigma} \bigg[-(\thetab^{\sigma\top}\phib) \bigg] + \grad{\thetab^\sigma} \bigg[ \log \frac{1}{\sqrt{2\pi}}\bigg]\\
+&=  {-\phib}\\
 \end{align*}
 
 \begin{align*}
-\nabla_{\bm{\theta}^\sigma} \text{B} &= \nabla_{\bm{\theta}^\sigma} \bigg[ \exp\bigg(- \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg)\bigg]\\
-&= \text{B}\nabla_{\bm{\theta}^\sigma} \bigg[ - \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})})\bigg]\\
-&= \text{B}\nabla_{\bm{\theta}^\sigma} \bigg[ - \frac{(a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{1}\frac{1}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\bigg]\\
-&= \text{B}\frac{{-\phi} (a - \bm{\theta}^{\mu\top}\bm{\phi})^2}{2\exp(\bm{\theta}^{\sigma\top}\bm{\phi})}\\
+\grad{\thetab^\sigma} \log \text{B} &= \grad{\thetab^\sigma} \log \bigg[ \exp\bigg(- \frac{(a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\bigg)\bigg]\\
+&=\grad{\thetab^\sigma} \bigg[ - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
+&=\grad{\thetab^\sigma} \bigg[ - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2\bigg]\exp(\thetab^{\sigma\top}\phib)^{-1} +  - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2 \grad{\thetab^\sigma} \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
+&=0\quad +\quad  - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2 \grad{\thetab^\sigma} \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
+&= \frac{{\phib} (a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\\
 \end{align*}
 
 

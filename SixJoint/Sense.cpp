@@ -13,7 +13,7 @@ void updateCurrentSensation()  {
 
 
 void logSensations() {
-    Serial.print(lastCurrentReading);
+    Serial.println(lastCurrentReading);
 
     
 }

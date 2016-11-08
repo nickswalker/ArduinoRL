@@ -4,8 +4,8 @@
 #include "Pins.h"
 #include "Strings.h"
 #include "Sense.h"
+#include "Vector.h"
 
-#define JOINT_MOVE_AMOUNT 20
 
 extern const char spaceString[];
 
@@ -38,11 +38,26 @@ void resetArmToRandomPosition() {
     
 }
 
-void logArmState() {
+void chooseRandomAction(ArmAction &action) {
     for (int i = 0; i < NUM_JOINTS; i++) {
-      Serial.print(currentState.jointAngles[i]);
-      Serial.print(spaceString);
+      action.jointDeltas[i] = random(-MAX_JOINT_MOVE_AMOUNT, MAX_JOINT_MOVE_AMOUNT);
     }
+}
+
+void chooseRandomState(ArmState &state) {
+  for (int i = 0; i < NUM_JOINTS; i++) {
+      state.jointAngles[i] = random(jointRangeMin[i], jointRangeMax[i]);
+    }
+}
+
+void actionBetweenStates(const ArmState &from, const ArmState &to, ArmAction &action) {
+  for (int i = 0; i < NUM_JOINTS; i++) {
+      action.jointDeltas[i] = to.jointAngles[i] - from.jointAngles[i];
+  }
+}
+
+void logArmState() {
+    logVector(currentState.jointAngles, NUM_JOINTS);
 }
 
 /// Adjusts the arm's state.
@@ -50,7 +65,6 @@ void apply(ArmAction& action) {
 
     // Let's keep track of this for the learner.
     previousState = currentState;
-
     for (int i = 0; i < NUM_JOINTS; i++) {
         currentState.jointAngles[i] += action.jointDeltas[i];
         // Check to see if the movements caused an underflow

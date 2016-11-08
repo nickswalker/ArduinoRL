@@ -1,26 +1,25 @@
 #include "Output.h"
 
 bool ledState = false;
+
 void chirp() {
     digitalWrite(buzzerPin, HIGH);
     delay(5);
     digitalWrite(buzzerPin, LOW);
 }
 
-void tripleChirp() {
+void chirp(int duration) {
     digitalWrite(buzzerPin, HIGH);
-    delay(3);
-    digitalWrite(buzzerPin, LOW);
-    delay(1);
-    digitalWrite(buzzerPin, HIGH);
-    delay(3);
-    digitalWrite(buzzerPin, LOW);
-    delay(1);
-    digitalWrite(buzzerPin, HIGH);
-    delay(3);
-    digitalWrite(buzzerPin, LOW);
+    delay(duration);
+    digitalWrite(buzzerPin, LOW);  
 }
 
+void chirpN(int n, int duration) {
+  for (int i = 0; i < n; i++) {
+    chirp(duration);
+    delay(20); 
+  }
+}
 
 void toggleLed() {
     ledState = !ledState;

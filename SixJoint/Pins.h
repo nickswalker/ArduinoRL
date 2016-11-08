@@ -4,7 +4,8 @@
 #include <Arduino.h>
 
 const int onBoardLedPin = 13;
-const int buzzerPin = 5;
+const int buzzerPin = 6;
+const int currentSensorPin = A3; 
 
 const int ledPin = 11;
 const int jointZeroPin = 22;

@@ -20,6 +20,12 @@
 
 \usepackage{amsmath,amsfonts,amssymb}
 
+\usepackage{amssymb}
+\usepackage{tikz}
+\usetikzlibrary{arrows,shapes}
+
+\tikzset{every picture/.style={remember picture}}
+
 \setlength\parindent{0pt} % Removes all indentation from paragraphs
 
 \renewcommand{\labelenumi}{\alph{enumi}.} % Make numbering in the enumerate environment by letter rather than number (e.g. section 6)
@@ -125,7 +131,10 @@ The servo controller library used for this project allows joint angles to be spe
 
 \subsection{Policy Gradient}
 
-For this task, policies are much easier to model and optimize over than value functions. This suggests that a policy gradient approach may be appropriate. The book provides one possible policy parameterization for a continuous state-action problem,
+For this task, policies are much easier to model and optimize over than value functions. This suggests that a policy gradient approach may be appropriate. 
+
+\subsubsection{Policy Representation}
+The book provides one possible policy parameterization for a continuous state-action problem,
 
 \begin{gather*}
 	\pi (a | s, \thetab) =  \frac{1}{\sigma(s, \thetab)\sqrt{2\pi}}\exp\bigg({-\frac{(a - \mu(s, {\thetab}))^2}{2\sigma(s, \thetab)})}\bigg)\\
@@ -144,57 +153,54 @@ where $a$ is a scalar real-valued action. Because the agent has to pick six join
 \end{gather*}
 where $\bm{\Sigma}$ is the covariance matrix and $|\bm{\Sigma}|$ is its determinant. However, it is not clear how best to parameterize a representation of $\bm{\mu}$ and $\bm{\Sigma}$, and the derivation of its gradient is more complicated. For this project, I will use six independent normal policies.
 
+\subsubsection{Learning Algorithm}
 
-\subsubsection{Function Approximation}
+With only 32kb of RAM available, it is important to select an algorithm with minimal overhead and update complexity so that the bulk of memory can be used for storing weights. The book provides two approaches. REINFORCE does its weight updates at the end of an episode once the full return is known. Joint angles and deltas fit in a single byte, and rewards are 4 byte floats, so we can compactly represent a stored S-A-R tuple in 16 bytes. Each update requires the calculation of the gradient which can be done with $|\thetab|$ stack space.
 
-Approximation allows tight control of the amount of memory being used to represent the value function. Because of the complex update step however, only at most half of the memory can be used for storing weights. Even then, the update step must be implemented carefully to control the stack size. Consider the episodic semi-gradient one-step Sarsa update:
+We can define inequalities that make the memory tradeoffs clear. For REINFORCE:
 
-\begin{equation}\label{eqn:update}
-\thetab_{t+1} = 
-\thetab_t + 
-\alpha \Big[
-	R_{t+1} + 
-	\gamma \hat{q}(S_{t+1}, A_{t+1}\, \thetab_t) 
-	- \hat{q}(S_t, A_t, \thetab_t)
-\Big]
-\nabla\hat{q}(S_t, A_t, \thetab_t)\tag{1}
-\end{equation}
+\begin{gather*}
+ \underbrace{13 \cdot (|\phib| \cdot 4\text{b})}_{\text{two feature vectors per joint + one on stack}} +  \underbrace{16\text{b} \cdot s}_{\text{max step history}} < 32\text{kb}
+\end{gather*}
 
-And in the linear case:
 
-\begin{equation}\label{eqn:linear_update}
-	\thetab_{t+1} = 
-	\thetab_t + 
-		\alpha \Big[
-			R_{t+1} + \gamma\, \thetab_t^\top\phib_{t+1} \space
-			- \thetab_t^\top\bm{\phib}_t
-		\Big]\bm{\phib}_t\tag{2}
-\end{equation}
+Because REINFORCE doesn't update until the end of an episode, it will take some time for the agent to begin climbing the gradient. It isn't clear what the best value for the maximum number of steps in an episode should be. Clearly, it should be high enough that the agent can feasibly reach the goal, but not so high that it allows the agent to wander for too long between updates.
 
-It is possible to implement the update using only $n$ additional space, where $n$ is the number of weights, but this is easy to do incorrectly. If the action selection step is placed after the memory allocation, the stack will consume $2n$ memory; maximizing the value function over possible next states requires an additional $n$ stack space.
+One-step Actor Critic augments REINFORCE by learning a state-value function so it can bootstrap during an episode. The parameterization of the value function need not be the same as state features used for the policy weights, but for simplicity I will estimate the memory footprint assuming that both are the same. This adds another set of weights to store, but removes the need to store an episode history and accelerates learning.
 
-	\begin{algorithm}
-		\caption{Memory-conscious Episodic Semi-gradient One-step Sarsa}
-		\label{alg:update}
-		\begin{algorithmic}[1] % The number tells where the line numbering should start
-			\Procedure{Update}{$S_t$, $A_t$, $S_{t+1}$, \bm{$\theta$}}
-			\State $A_{t+1} \gets $ choose action from $S_{t+1}$ according to policy
-			\State Allocate \bm{$x$} to be a vector the size of \bm{$\theta$}, and floats $r$ and $a$
-			\State $r\gets r(S_t$, $A_t$, $S_{t+1}$)
-			\State $\bm{x} \gets \phib(S_{t+1}, A_{t+1})$ \Comment store $\phib_{t+1}$
-			\State $a \gets \thetab^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phib_{t+1}$
-			\State $\bm{x} \gets \phib(S_{t}, A_{t})$ \Comment store $\phib_t$
-			\State $a \gets r + \gamma v - \thetab^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
-			\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the weight update
-			\State \bm{$\theta} \gets \thetab + x$
-			\
-			\EndProcedure
-		\end{algorithmic}
-	\end{algorithm}
-	
-An approximation approach implemented on the microcontroller can use at most 1kb of RAM, or 250 features (less the incidental stack space required during the update step). It was not clear that this would be sufficient for good performance, but it was the only feasible approach. I implemented a semi-gradient one-step Sarsa agent using a linear function approximator.
-	
-I have not dwelt on time efficiency since, even with software floating point operations, 16MHz permits a fair amount of computation. For this project, I was satisfied as long as actions could be selected more quickly than the servos could execute them. Meeting this deadline, which was about 100ms, or 1.6 million cycles, was not an issue, even while the device was also streaming logging information over serial. If time performance requirements were tighter, special attention would need to be paid to the action selection process, which involves $|A|$ value function queries, each costing $n$ multiplications
+\begin{gather*}
+\underbrace{19 \cdot (|\phib| \cdot 4\text{b})}_{\text{three feature vectors per joint, one on stack}}  < 32\text{kb}
+\end{gather*}
+
+Actor Critic allows about 400 state features, while REINFORCE allows 500 assuming the max episode size is fixed at 200 steps.
+
+The additional features allowed by REINFORCE are not significant enough to outweight the benefits of faster learning, so I chose One-step Actor Critic. A memory conscious implementation is provided below.
+\newcommand{\bw}{\bm{w}}
+\begin{algorithm}
+	\caption{Memory-conscious One-step Actor Critic}
+	\label{alg:update}
+	\begin{algorithmic}[1] % The number tells where the line numbering should start
+		\Procedure{Update}{$S$, $A$, \bm{$\theta$}}
+		\State $A \gets $ choose action according to $\pi(\cdot|S,\thetab)$
+		\State Allocate \bm{$x$} to be a vector the size of \bm{$\theta$}, and floats $r$ and $a$
+		\State $r\gets r(S_t$, $A_t$, $S_{t+1}$)
+		\State $\bm{x} \gets \phib(S_{t+1}, A_{t+1})$ \Comment store $\phib_{t+1}$
+		\State $a \gets \thetab^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phib_{t+1}$
+		\State $\bm{x} \gets \phib(S_{t}, A_{t})$ \Comment store $\phib_t$
+		\State $a \gets r + \gamma v - \thetab^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
+		\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the weight update
+		\State \bm{$\theta} \gets \thetab + x$
+		\
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+ 
+
+\subsubsection{State Features}
+
+I used a simple discretization of the state space. The range of each joint was divided into 8\space\space20\degree\space sections. The two sets of section features along with a binary feature for the LED state were then gridded, resulting in 128 mutually exclusive binary features. 
+
+
 	
 	
 
@@ -206,29 +212,6 @@ I have not dwelt on time efficiency since, even with software floating point ope
 
 
 The agent learns for 50 episodes using $\alpha =$ 0.2, $\gamma =$ 0.99,  following an $\epsilon$-greedy policy with $\epsilon=$ 0.1. Then, the agent operates in an evaluation mode for 50 episodes with $\alpha=\epsilon=0.0$. During this period, episodes are limited to 200 steps in case the agent executes a policy that never reaches the goal. A small delay is used between action execution and sensing to allow the arm to settle. The photocell threshold is calibrated before every session to prevent spurious activations.
-
-\subsection{Features}
-
-I used a simple discretization of the state space. The range of each joint was divided into 8\space\space20\degree\space sections. The two sets of section features along with a binary feature for the LED state were then gridded, resulting in 128 mutually exclusive binary features. 
-
-Because of the large number of actions, it was not feasible to maintain separate approximators per action, so I used three action features: two characterizing the direction of each joint's movement, taking values in $\{0, 1, -1\}$, and one binary feature describing whether or not the LED is activated by the action. Clearly, three features is insufficient to encode the differences in value for all actions across the state space, however there was not enough memory to grid these features with the state features. The total number of weights in the representation is still below the theoretical maximum number of weights for the microcontroller, so additional features could have been added with more time.
-
-
-\subsection{Actions}
-
-At each time step, the agent selects one entry from each column to form its action. If the LED is already on and the agent chooses an action that includes turning the LED on, the light remains activated for the next timestep. The behavior is symmetric in the LED off case.
-
-\begin{center}
-	\begin{tabular}{ l l l}
-		Joint 1 & Joint 2 & LED\\ \midrule
-		Move left & Move left & Turn on\\
-		Move right & Move right & Turn off\\
-		No movement & No movement & 
-		
-	\end{tabular}
-\end{center}
-
-To better support the state representation, I set the agent's movement increment to 20\degree. This ensures that the state resulting from any movement has a different feature vector than the previous state. This change does limit the granularity of the agent's movements, but without it, the agent must randomly escape the 20\degree\space sections by repeatedly making smaller movements, which makes learning take much longer. 
 
 %----------------------------------------------------------------------------------------
 %	SECTION 4

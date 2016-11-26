@@ -1,9 +1,6 @@
 #include "Vector.h"
 #include "Strings.h"
 
-extern const char spaceString[];
-extern const char rightBracketString[];
-extern const char leftBracketString[];
 
 void logVector(const float vector[], const size_t length) {
     Serial.print(leftBracketString);
@@ -21,6 +18,14 @@ void logVector(const float vector[], const size_t length) {
     Serial.println(rightBracketString);  
 }
 
+void logVector(const int8_t vector[], const size_t length) {
+    Serial.print(leftBracketString);
+    for( uint8_t i = 0; i < length; i++) {
+        Serial.print(spaceString);
+        Serial.print(vector[i]);
+    }
+    Serial.println(rightBracketString);  
+}
 
 void logVector(const uint8_t vector[], const size_t length) {
     Serial.print(leftBracketString);
@@ -29,6 +34,16 @@ void logVector(const uint8_t vector[], const size_t length) {
         Serial.print(vector[i]);
     }
     Serial.println(rightBracketString);  
+}
+
+void copy(const float first[], float second[], const size_t length) {
+  for( uint8_t i = 0; i < length; i++) {
+    second[i] = first[i];
+  }
+}
+
+void norm(float vector[], const size_t length) {
+  multiply(1.0 / dot(vector,vector, length), vector, length);
 }
 
 float dot(const uint8_t first[], const uint8_t second[], const size_t length) {
@@ -52,6 +67,12 @@ void add(float first[], const float second[], const size_t length) {
     for (uint8_t i = 0; i < length; i++) {
         first[i] = first[i] + second[i];
     }
+}
+
+void add(const float first[], const float second[], float result[], const size_t length) {
+     for (uint8_t i = 0; i < length; i++) {
+        result[i] = first[i] + second[i];
+    }  
 }
 
 

@@ -1,144 +1,165 @@
 #include "Learning.h"
 #include <Arduino.h>
-#include "VFA.h"
 #include "Task.h"
 #include <math.h>
 #include "Vector.h"
 #include "Output.h"
-#include "Gaussian.h"
 #include "math.h"
+#include "Polynomial.h"
+#include "Sense.h"
+#include "Debug.h"
 
 
-#define NUM_MEAN_FEATURES NUM_STATE_FEATURES
-#define NUM_STD_DEV_FEATURES NUM_STATE_FEATURES
-#define STD_DEV_FEATURES_OFFSET NUM_STATE_FEATURES
+#define NUM_PERTURBATIONS 2 * NUM_POLICY_FEATURES
 
-#define THETA_MU(weights) (weights)
-#define THETA_SIGMA(weights) (weights + NUM_STATE_FEATURES)
-#define MU(parameters, index) parameters[i]
-#define SIGMA(parameters, index) parameters[NUM_JOINTS + i] 
+extern ArmState startState;
+extern ArmState currentState;
+extern ArmState targetState;
+// Policy weights are stored per each joint, as a vector of weights. 
 
-#define D_LOG(str, num) Serial.print(str);Serial.print(": ");if(isnan(num)) Serial.println("NaN");else if (isinf(num)) Serial.println("inf");else Serial.println(num);
-#define D_LOG_V(str,vec, len) Serial.print(str);Serial.print(": ");logVector(vec, len);
+#define P_A(parameters, index) parameters[NUM_JOINTS * index + 0u]
+#define P_B(parameters, index) parameters[NUM_JOINTS * index + 1u]
+#define P_C(parameters, index) parameters[NUM_JOINTS * index + 2u]
+#define P_MV(parameters, index) parameters[NUM_JOINTS * index + 3u]
 
-#define EULER 2.718281828459045235360287471352f
+float theta[NUM_POLICY_FEATURES] = {.5};
+float actingTheta[NUM_POLICY_FEATURES] = {0};
+float perturbations[NUM_PERTURBATIONS][NUM_POLICY_FEATURES] = {0};
 
-extern float lastReward;
-extern ArmAction nextAction;
-// Policy weights are stored per each joint, as a vector of weights. Top half is for means, bottom for std deviations
-float theta[NUM_JOINTS][NUM_POLICY_FEATURES] = {0};
-extern float valueWeights[];
 extern uint8_t jointRangeMin[];
 extern uint8_t jointRnageMax[];
 
 float alpha = 0.001;
-float beta = 0.001;
 float rl_gamma = 0.9999999;
 float I;
 
 void logPolicyParameters() {
-    float policyParameters[NUM_JOINTS * 2];
-    float stateFeatures[NUM_STATE_FEATURES];
-    calculatePolicyParameters(policyParameters, theta, stateFeatures);
-
-    Serial.print("[");
-    for (int i = 0; i < NUM_JOINTS; i++) {
-      Serial.print("m"); 
-      Serial.print(MU(policyParameters, i));
-      Serial.print(" s");
-      Serial.print(SIGMA(policyParameters, i));
-      Serial.print(", ");
-    }
-    Serial.println("]");
+  logVector(theta, NUM_POLICY_FEATURES);
     
 }
 
-/// Episodic One-step Actor Critic
-void learnerUpdate(const ArmState &state, const ArmAction &action, const ArmState &statePrime){
-    ArmAction actionPrime;
-    chooseAction(statePrime, actionPrime);
-    float r = reward(state, action, statePrime);
-    float x[NUM_STATE_FEATURES];
-    
-    // place phi_t+1 into x
-    extractFeatures(statePrime, actionPrime, x);
-
-    float v_t1 = dot(valueWeights, x, NUM_STATE_FEATURES);
-
-    // fill x with phi_t
-    extractFeatures(state, action, x);
-
-    float v_t = dot(valueWeights, x, NUM_STATE_FEATURES);
-    float error = r + rl_gamma * v_t1 - v_t;
-    D_LOG("err", error);
-    D_LOG_V("w", valueWeights, NUM_STATE_FEATURES);
-    // Overwrite x with the final weight error
-    multiply(beta * error, x, NUM_STATE_FEATURES);
-
-    add(valueWeights, x, NUM_STATE_FEATURES);
-    // Now we're done with x...
-
-    extractFeatures(state, action, x);
-    // Update theta. This is essentially six independent learning updates.
-    for (int i = 0; i < NUM_JOINTS; i++) {
-        extractFeatures(state, action, x);
-        float gradient[NUM_POLICY_FEATURES];
-        //D_LOG_V("grad", gradient, NUM_POLICY_FEATURES);
-        calculateGradient(action.jointDeltas[i], theta[i], x, gradient);
-
-        // Calculate the actual weight update
-        multiply(I * alpha * error, gradient, NUM_STATE_FEATURES);
-        add(theta[i], gradient, NUM_POLICY_FEATURES);
-        D_LOG_V("theta",theta[i], NUM_POLICY_FEATURES);
-    }
-    I *= rl_gamma;
-    nextAction = actionPrime;
-    lastReward = r;
-}
-/// Gradient of the normal distribution wrt theta
-/// Theta is the weight vector for both mu and sigma of a single joint
-void calculateGradient(const float a, const float theta[], const float state_features[], float result[]) {
-  const float mu = dot(THETA_MU(theta), state_features, NUM_STATE_FEATURES);
-  const float sigma = dot(THETA_SIGMA(theta), state_features, NUM_STATE_FEATURES);
-
-  const float numerator = pow(a - mu, 2.0);
-  const float denominator = 2.0 * pow(EULER, sigma);
-  const float phi_coefficient = numerator/denominator;
-  D_LOG("cof", phi_coefficient);
-
-
-  multiply(-1 * phi_coefficient, state_features, THETA_MU(result), NUM_STATE_FEATURES);
-  multiply(phi_coefficient, state_features, THETA_SIGMA(result), NUM_STATE_FEATURES);
-  // Subtract phi from the the theta_sigma
-  subtract(THETA_SIGMA(result), state_features, NUM_STATE_FEATURES);
-
-  
-}
-
-
-void chooseAction(const ArmState &state, ArmAction &action) {
-    D_LOG("choice",0);
-    float policyParameters[NUM_JOINTS * 2];
-    float stateFeatures[NUM_STATE_FEATURES];
-    calculatePolicyParameters(policyParameters, theta, stateFeatures);
-    for (uint8_t i = 0; i < NUM_JOINTS; i++) {
-      action.jointDeltas[i] = sampleNormalDistribution(MU(policyParameters, i), SIGMA(policyParameters, i));
-    }
-}
-
-void calculatePolicyParameters(float result[], const float theta[][NUM_POLICY_FEATURES], const float stateFeatures[]) {
+float evaluatePolicy() {
+  ArmAction deltaToGoal;
+  actionBetweenStates(currentState, startState, deltaToGoal);
+  D_LOG_V("act", deltaToGoal.jointDeltas, 6);
+  apply(deltaToGoal);
   delay(1000);
-  D_LOG_V("state features", stateFeatures, NUM_STATE_FEATURES);
-  // Calculate means
-  for (uint8_t i = 0; i < NUM_JOINTS; i++) {
-    MU(result,i) = dot(THETA_MU(theta[i]), stateFeatures, NUM_STATE_FEATURES);
+  actionBetweenStates(currentState, targetState, deltaToGoal);
+  D_LOG_V("cur", currentState.jointAngles, 6);
+  D_LOG_V("act", deltaToGoal.jointDeltas, 6);
+  float equations[NUM_JOINTS][4];
+   uint32_t maxIterations = 0;
+   for (uint16_t j = 0; j < NUM_JOINTS; j++) {
+      float a = exp(P_A(actingTheta, j));
+      float b = exp(P_B(actingTheta, j));
+      float c = exp(P_C(actingTheta, j));
+     
+
+      const float target = deltaToGoal.jointDeltas[j];
+      const float sum = a + b + c;
+      const float alpha = (a / sum) * target;
+      const float beta = (b / sum) * target;
+      const float gamma = (c / sum) * target;
+
+      
+      float maximizingT;
+      const float maximumVelocity = maximizeQuadratic(3.0 * alpha, 2.0 * beta, gamma, maximizingT);
+      D_LOG("max", maximumVelocity);
+      const float percentMax =  maximumVelocity / 10.0;
+
+      equations[j][0] = alpha;
+      equations[j][1] = beta;
+      equations[j][2] = gamma;
+
+
+      const float velocityFactor = exp(P_MV(actingTheta, j)) + 1;
+
+      D_LOG("vf", velocityFactor);
+      D_LOG("percent max", percentMax);
+      const float iterations = 100.0 * (1.0 / percentMax) * velocityFactor;
+      equations[j][3] = iterations;
+
+         D_LOG_V("eq", equations[j], 4);
+      maxIterations = max(maxIterations, (uint32_t)iterations);
+      
+   }
+   maxIterations = min(maxIterations, 254);
+    D_LOG("--------", maxIterations);
+   resetPowerMeasurement();
+   
+   ArmAction moveTo;
+    for (uint8_t i = 0; i < maxIterations; i++) {
+      for (uint8_t j = 0; j < NUM_JOINTS; j++) {
+        if (i < equations[j][i]) {
+          float* e = equations[j];
+          const float delta = cubic(e[0],e[1],e[2], (float)i /e[3]);
+          moveTo.jointDeltas[j] = delta;
+        } else {
+          moveTo.jointDeltas[j] = 0.0;
+        }
+      apply(moveTo);
+      delay(50);
+    }
   }
-  // Calculate std_devs
-  for (uint8_t i = 0; i < NUM_JOINTS; i++) {
-    float sigmaDot = dot(THETA_SIGMA(theta[i]), stateFeatures, NUM_STATE_FEATURES);
-    D_LOG("sd", sigmaDot);
-    SIGMA(result, i) = exp(sigmaDot);
-  }
-  D_LOG_V("params", result, NUM_JOINTS * 2);
+  return getPowerUsage();
 }
 
+void iterate() {
+    float evaluations[NUM_PERTURBATIONS] = {0};
+    generatePerturbations();
+    for (uint8_t i = 0; i < NUM_PERTURBATIONS; i++) {
+      add(perturbations[i], theta, actingTheta, NUM_POLICY_FEATURES);
+      evaluatePolicy();
+    }
+    float numUp[NUM_POLICY_FEATURES] = {0};
+    float numDown[NUM_POLICY_FEATURES] = {0};
+    float numNone[NUM_POLICY_FEATURES] = {0};
+    float averageUp[NUM_POLICY_FEATURES] = {0};
+    float averageDown[NUM_POLICY_FEATURES] = {0};
+    float averageNone[NUM_POLICY_FEATURES] = {0};
+    for (uint8_t i = 0; i < NUM_PERTURBATIONS; i++) {
+      for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
+        const float direction = perturbations[i][j];
+        if (direction > 0.0) {
+          numUp[j] += 1;
+          averageUp[j] += evaluations[i];
+        } else if (direction < 0.0) {
+            numDown[j] += 1;
+            averageDown[j] += evaluations[i];
+        } else {
+            numNone[j] += 1;
+            averageNone[j] += evaluations[i];
+        }
+      }
+    }
+
+    for (uint8_t i = 0; i < NUM_PERTURBATIONS; i++) {
+      for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
+        averageUp[j] /= numUp[j];
+        averageDown[j] /= numDown[j];
+        averageNone[j] /= numNone[j];
+      }
+    }
+
+    float delta[NUM_POLICY_FEATURES] = {0};
+    for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
+      if ( averageNone[j] > averageUp[j] && averageNone[j] > averageDown[j]) {
+        delta[j] = 0;
+      } else {
+        delta[j] = averageUp[j] - averageDown[j];
+      }
+    }
+    norm(delta, NUM_POLICY_FEATURES);
+    multiply(0.10, delta, NUM_POLICY_FEATURES);
+    add(theta, delta, NUM_POLICY_FEATURES);
+    copy(theta, actingTheta, NUM_POLICY_FEATURES);
+
+}
+
+void generatePerturbations() {
+  for (uint8_t i = 0; i < NUM_PERTURBATIONS; i++) {
+    for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
+      perturbations[i][j] = (float)((int)random(3) - 1) * PERTURBATION_STEP;
+    }
+  }
+}

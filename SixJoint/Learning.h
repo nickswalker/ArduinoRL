@@ -2,12 +2,9 @@
 #define LEARNING_H
 #include <stdint.h>
 #include "Arm.h"
-#include "VFA.h"
 
-#define NUM_POLICY_FEATURES NUM_STATE_FEATURES * 2
-
-#define DEFAULT_BETA 0.1
-#define DEFAULT_ALPHA 0.2
+#define NUM_POLICY_FEATURES NUM_JOINTS * 4
+#define PERTURBATION_STEP 0.1
 
 typedef struct ArmState {
     uint8_t jointAngles[NUM_JOINTS];
@@ -18,9 +15,7 @@ typedef struct ArmAction {
 } ArmAction;
 
 void logPolicyParameters();
-void logWeights();
-void calculateGradient(const float a, const float theta[], const float state_features[], float result[]);
-void calculatePolicyParameters(float result[], const float theta[][NUM_POLICY_FEATURES], const float stateFeatures[]);
-void chooseAction(const ArmState &state, ArmAction &action);
-void learnerUpdate(const ArmState &state, const ArmAction &action, const ArmState &statePrime);
+void iterate();
+float evaluatePolicy();
+void generatePerturbations();
 #endif

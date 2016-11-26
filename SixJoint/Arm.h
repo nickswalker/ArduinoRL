@@ -1,7 +1,7 @@
 #ifndef ARM_H
 #define ARM_H
 
-#define NUM_JOINTS 6
+#define NUM_JOINTS 6u
 #define MAX_JOINT_MOVE_AMOUNT 20
 struct ArmAction;
 struct ArmState;

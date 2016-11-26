@@ -5,6 +5,7 @@
 #include "Strings.h"
 #include "Sense.h"
 #include "Vector.h"
+#include "Debug.h"
 
 
 extern const char spaceString[];
@@ -19,7 +20,7 @@ ArmState previousState = {{0,0,0,0,0,0}};
 
 void resetArm() {
     ArmState middlePosition;
-    for (int i = 0; i < NUM_JOINTS; i++) {
+    for (uint i = 0; i < NUM_JOINTS; i++) {
       middlePosition.jointAngles[i] = ((uint16_t)jointRangeMin[i] + (uint16_t)jointRangeMax[i]) / 2;
     }
     // Could have to move quite a bit to reset.
@@ -39,19 +40,19 @@ void resetArmToRandomPosition() {
 }
 
 void chooseRandomAction(ArmAction &action) {
-    for (int i = 0; i < NUM_JOINTS; i++) {
+    for (uint i = 0; i < NUM_JOINTS; i++) {
       action.jointDeltas[i] = random(-MAX_JOINT_MOVE_AMOUNT, MAX_JOINT_MOVE_AMOUNT);
     }
 }
 
 void chooseRandomState(ArmState &state) {
-  for (int i = 0; i < NUM_JOINTS; i++) {
+  for (uint i = 0; i < NUM_JOINTS; i++) {
       state.jointAngles[i] = random(jointRangeMin[i], jointRangeMax[i]);
     }
 }
 
 void actionBetweenStates(const ArmState &from, const ArmState &to, ArmAction &action) {
-  for (int i = 0; i < NUM_JOINTS; i++) {
+  for (uint i = 0; i < NUM_JOINTS; i++) {
       action.jointDeltas[i] = to.jointAngles[i] - from.jointAngles[i];
   }
 }
@@ -65,7 +66,7 @@ void apply(ArmAction& action) {
 
     // Let's keep track of this for the learner.
     previousState = currentState;
-    for (int i = 0; i < NUM_JOINTS; i++) {
+    for (uint i = 0; i < NUM_JOINTS; i++) {
         currentState.jointAngles[i] += action.jointDeltas[i];
         // Check to see if the movements caused an underflow
         const uint8_t jointMin = jointRangeMin[i];
@@ -86,10 +87,7 @@ void apply(ArmAction& action) {
     }
     // If you get a lot of servo jitter, it's likely because your power supply can't handle the initial current spike.
     // Try adding another delay here avoid moving both motors at once.
-    for (int i = 0; i < NUM_JOINTS; i++) {
+    for (uint i = 0; i < NUM_JOINTS; i++) {
       servos[i].write(currentState.jointAngles[i]);
     }
-    // It's important to do this as the joints are actually moving.
-    updateCurrentSensation();
-    delay(150);
 }

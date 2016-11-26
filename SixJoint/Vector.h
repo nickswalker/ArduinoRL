@@ -3,15 +3,23 @@
 
 #include <Arduino.h>
 
+void logVector(const int8_t vector[], const size_t length);
+
 void logVector(const uint8_t vector[], const size_t length);
 
 void logVector(const float vector[], const size_t length);
+
+void norm(float vector[], const size_t length);
+
+void copy(const float first[], float second[], const size_t length);
 
 float dot(const uint8_t first[], const uint8_t second[], const size_t length);
 
 float dot(const float first[], const float second[], const size_t length);
 
 void add(float first[], const float second[], const size_t length);
+
+void add(const float first[], const float second[], float result[], const size_t length);
 
 void subtract(const uint8_t first[], const uint8_t second[], float result[], const size_t length);
 

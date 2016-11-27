@@ -75,7 +75,6 @@ float dot(const float first[], const float second[], const size_t length) {
         result += first[i] * second[i];
 
     }
-            D_LOG("m", result);
     return result;
 }
 

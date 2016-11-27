@@ -7,13 +7,11 @@
 #include "Strings.h"
 #include "Output.h"
 
-#define DEFAULT_ALPHA 0.1
 #define EVALUATION_MODE 1
 #define EVALUATION_SWITCH_POINT 50
 #define EVALUATION_MAX_STEPS 200
 
 extern float alpha;
-extern float I;
 
 extern const char spaceString[];
 extern const char cumulativeRewardString[];
@@ -89,7 +87,6 @@ void loop() {
         resetArmToRandomPosition();
         currentEpisode = 0;
         alpha = DEFAULT_ALPHA;
-        I = 1.0;
         markTrialStart();
     }
 

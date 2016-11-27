@@ -11,7 +11,7 @@
 #include "Arm.h"
 
 
-#define NUM_PERTURBATIONS 2 * NUM_POLICY_FEATURES
+#define NUM_PERTURBATIONS NUM_POLICY_FEATURES
 
 extern ArmState startState;
 extern ArmState currentState;
@@ -23,16 +23,22 @@ extern ArmState targetState;
 #define P_C(parameters, index) parameters[4 * index + 2u]
 #define P_MV(parameters, index) parameters[4 * index + 3u]
 
-float theta[NUM_POLICY_FEATURES] = {.5};
+float theta[NUM_POLICY_FEATURES] = {.5, .5, .5, .5, 
+.5, .5, .5, .5,
+.5, .5, .5, .5,
+.5, .5, .5, .5,
+.5, .5, .5, .5,
+.5, .5, .5, .5};
 float actingTheta[NUM_POLICY_FEATURES] = {0};
 float perturbations[NUM_PERTURBATIONS][NUM_POLICY_FEATURES] = {0};
 
 extern uint8_t jointRangeMin[];
 extern uint8_t jointRnageMax[];
 
-float alpha = 0.001;
+float alpha = DEFAULT_ALPHA;
 float rl_gamma = 0.9999999;
-float I;
+
+
 
 void logPolicyParameters() {
   logVector(theta, NUM_POLICY_FEATURES);
@@ -40,8 +46,8 @@ void logPolicyParameters() {
 }
 
 float evaluatePolicy() {
-  ArmAction deltaToGoal;
   moveSmoothlyTo(startState);
+  ArmAction deltaToGoal;
   actionBetweenStates(currentState, targetState, deltaToGoal);
   float equations[NUM_JOINTS][4];
    uint32_t maxIterations = 0;
@@ -66,14 +72,14 @@ float evaluatePolicy() {
       equations[j][2] = gamma;
 
       const float velocityFactor = exp(P_MV(actingTheta, j)) + 1;
-      const float iterations = 10.0 * percentMax * velocityFactor;
+      const float iterations = 5.0 * percentMax * velocityFactor;
       equations[j][3] = ceil(iterations);
       maxIterations = max(maxIterations, (uint32_t)(iterations));
 
       //D_LOG_V("EQ", equations[j], 4);
       
    }
-   maxIterations = min(maxIterations, 2000);
+   maxIterations = min(maxIterations, 2000u);
    //D_LOG("iterations", maxIterations);
    resetPowerMeasurement();
    
@@ -106,11 +112,11 @@ void iterate() {
       add(perturbations[i], theta, actingTheta, NUM_POLICY_FEATURES);
       const float evaluation = evaluatePolicy();
       evaluations[i] = evaluation;
-      D_LOG("eval", evaluation);
     }
-    float numUp[NUM_POLICY_FEATURES] = {0};
-    float numDown[NUM_POLICY_FEATURES] = {0};
-    float numNone[NUM_POLICY_FEATURES] = {0};
+    D_LOG_V("evals", evaluations, NUM_PERTURBATIONS);
+    uint8_t numUp[NUM_POLICY_FEATURES] = {0};
+    uint8_t numDown[NUM_POLICY_FEATURES] = {0};
+    uint8_t numNone[NUM_POLICY_FEATURES] = {0};
     float averageUp[NUM_POLICY_FEATURES] = {0};
     float averageDown[NUM_POLICY_FEATURES] = {0};
     float averageNone[NUM_POLICY_FEATURES] = {0};
@@ -121,28 +127,34 @@ void iterate() {
           numUp[j] += 1;
           averageUp[j] += evaluations[i];
         } else if (direction < 0.0) {
-            numDown[j] += 1;
-            averageDown[j] += evaluations[i];
+           numDown[j] += 1;
+           averageDown[j] += evaluations[i];
         } else {
-            numNone[j] += 1;
-            averageNone[j] += evaluations[i];
+           numNone[j] += 1;
+           averageNone[j] += evaluations[i];
         }
       }
     }
 
-    for (uint8_t i = 0; i < NUM_PERTURBATIONS; i++) {
-      for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
-        if (numUp[j] > 0) {
-          averageUp[j] /= numUp[j];
-        }
-        if (numDown[j] > 0) {
-          averageDown[j] /= numDown[j];
-        }
-        if (numNone[j] > 0) {
-          averageNone[j] /= numNone[j];
-        }
+    for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
+      if (numUp[j] > 0) {
+        averageUp[j] /= (float)numUp[j];
+      }
+      if (numDown[j] > 0) {
+        averageDown[j] /= (float)numDown[j];
+      }
+      if (numNone[j] > 0) {
+        averageNone[j] /= (float)numNone[j];
       }
     }
+      
+    D_LOG_V("nup", numUp, NUM_POLICY_FEATURES);
+    D_LOG_V("ndown", numDown, NUM_POLICY_FEATURES);
+    D_LOG_V("nnone", numNone, NUM_POLICY_FEATURES);
+
+    D_LOG_V("aup", averageUp, NUM_POLICY_FEATURES);
+    D_LOG_V("adown", averageDown, NUM_POLICY_FEATURES);
+    D_LOG_V("anone", averageNone, NUM_POLICY_FEATURES);
 
     float delta[NUM_POLICY_FEATURES] = {0};
     for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
@@ -152,10 +164,18 @@ void iterate() {
         delta[j] = averageUp[j] - averageDown[j];
       }
     }
+    D_LOG_V("delta", delta, NUM_POLICY_FEATURES);
     norm(delta, NUM_POLICY_FEATURES);
-    multiply(0.10, delta, NUM_POLICY_FEATURES);
+    D_LOG_V("norm", delta, NUM_POLICY_FEATURES);
+    multiply(alpha, delta, NUM_POLICY_FEATURES);
+    D_LOG_V("step", delta, NUM_POLICY_FEATURES);
+
+    D_LOG_V("theta", theta, NUM_POLICY_FEATURES);
     add(theta, delta, NUM_POLICY_FEATURES);
+    D_LOG_V("new theta", theta, NUM_POLICY_FEATURES);
+    
     copy(theta, actingTheta, NUM_POLICY_FEATURES);
+    D_LOG_V("acting theta", actingTheta, NUM_POLICY_FEATURES);
 
 }
 

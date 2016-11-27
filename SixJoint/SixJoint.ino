@@ -24,6 +24,7 @@ Servo servos[] = {Servo(), Servo(), Servo(), Servo(), Servo(), Servo()};
 
 extern ArmState currentState;
 extern ArmState previousState;
+extern ArmState startState;
 
 ArmAction nextAction = {{0,0,0,0,0,0}};
 
@@ -33,7 +34,8 @@ uint16_t currentEpisode = 0;
 
 void setup() {
     randomSeed(analogRead(A3));
-    pinMode(currentSensorPin, INPUT);
+    analogReadResolution(16);
+    analogReadAveraging(16);
     pinMode(ledPin, OUTPUT);
     pinMode(buzzerPin, OUTPUT);
     
@@ -48,6 +50,8 @@ void setup() {
     Serial.begin(115200);
 
     setupPowerMeasurement();
+
+    moveSmoothlyTo(startState);
 }
 
 void logEpisodeInformation(float totalReturn) {

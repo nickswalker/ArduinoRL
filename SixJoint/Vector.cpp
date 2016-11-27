@@ -1,6 +1,6 @@
 #include "Vector.h"
 #include "Strings.h"
-
+#include "Debug.h"
 
 void logVector(const float vector[], const size_t length) {
     Serial.print(leftBracketString);
@@ -42,8 +42,23 @@ void copy(const float first[], float second[], const size_t length) {
   }
 }
 
+float absMaxComponent(const float vector[], const size_t length) {
+  float absMax = 0.0;
+    for( uint8_t i = 0; i < length; i++) {
+    absMax = fabs(vector[i]) > absMax ? fabs(vector[i]): absMax;
+  }
+  return absMax;
+}
+
 void norm(float vector[], const size_t length) {
-  multiply(1.0 / dot(vector,vector, length), vector, length);
+  const float absMax = absMaxComponent(vector, length);
+  if (absMax > 0) {
+    multiply(1.0/absMax, vector, length);
+    const float v_len = dot(vector,vector, length);
+    const float factor = 1.0 / v_len;
+    multiply(factor, vector, length);
+  }
+
 }
 
 float dot(const uint8_t first[], const uint8_t second[], const size_t length) {
@@ -58,7 +73,9 @@ float dot(const float first[], const float second[], const size_t length) {
     float result = 0.0;
     for( uint8_t i = 0; i < length; i++) {
         result += first[i] * second[i];
+
     }
+            D_LOG("m", result);
     return result;
 }
 

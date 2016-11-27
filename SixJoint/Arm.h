@@ -6,6 +6,7 @@
 struct ArmAction;
 struct ArmState;
 
+void moveSmoothlyTo(ArmState& targetState);
 void resetArm();
 void resetArmToRandomPosition();
 void logArmState();

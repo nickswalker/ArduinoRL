@@ -8,6 +8,7 @@
 #include "Polynomial.h"
 #include "Sense.h"
 #include "Debug.h"
+#include "Arm.h"
 
 
 #define NUM_PERTURBATIONS 2 * NUM_POLICY_FEATURES
@@ -17,10 +18,10 @@ extern ArmState currentState;
 extern ArmState targetState;
 // Policy weights are stored per each joint, as a vector of weights. 
 
-#define P_A(parameters, index) parameters[NUM_JOINTS * index + 0u]
-#define P_B(parameters, index) parameters[NUM_JOINTS * index + 1u]
-#define P_C(parameters, index) parameters[NUM_JOINTS * index + 2u]
-#define P_MV(parameters, index) parameters[NUM_JOINTS * index + 3u]
+#define P_A(parameters, index) parameters[4 * index + 0u]
+#define P_B(parameters, index) parameters[4 * index + 1u]
+#define P_C(parameters, index) parameters[4 * index + 2u]
+#define P_MV(parameters, index) parameters[4 * index + 3u]
 
 float theta[NUM_POLICY_FEATURES] = {.5};
 float actingTheta[NUM_POLICY_FEATURES] = {0};
@@ -40,68 +41,62 @@ void logPolicyParameters() {
 
 float evaluatePolicy() {
   ArmAction deltaToGoal;
-  actionBetweenStates(currentState, startState, deltaToGoal);
-  D_LOG_V("act", deltaToGoal.jointDeltas, 6);
-  apply(deltaToGoal);
-  delay(1000);
+  moveSmoothlyTo(startState);
   actionBetweenStates(currentState, targetState, deltaToGoal);
-  D_LOG_V("cur", currentState.jointAngles, 6);
-  D_LOG_V("act", deltaToGoal.jointDeltas, 6);
   float equations[NUM_JOINTS][4];
    uint32_t maxIterations = 0;
    for (uint16_t j = 0; j < NUM_JOINTS; j++) {
+
       float a = exp(P_A(actingTheta, j));
       float b = exp(P_B(actingTheta, j));
       float c = exp(P_C(actingTheta, j));
      
-
       const float target = deltaToGoal.jointDeltas[j];
       const float sum = a + b + c;
       const float alpha = (a / sum) * target;
       const float beta = (b / sum) * target;
       const float gamma = (c / sum) * target;
 
-      
       float maximizingT;
-      const float maximumVelocity = maximizeQuadratic(3.0 * alpha, 2.0 * beta, gamma, maximizingT);
-      D_LOG("max", maximumVelocity);
-      const float percentMax =  maximumVelocity / 10.0;
+      const float curveMaxVelocity = maximizeQuadratic(3.0 * alpha, 2.0 * beta, gamma, maximizingT);
+      const float percentMax =  curveMaxVelocity / 10.0;
 
       equations[j][0] = alpha;
       equations[j][1] = beta;
       equations[j][2] = gamma;
 
-
       const float velocityFactor = exp(P_MV(actingTheta, j)) + 1;
+      const float iterations = 10.0 * percentMax * velocityFactor;
+      equations[j][3] = ceil(iterations);
+      maxIterations = max(maxIterations, (uint32_t)(iterations));
 
-      D_LOG("vf", velocityFactor);
-      D_LOG("percent max", percentMax);
-      const float iterations = 100.0 * (1.0 / percentMax) * velocityFactor;
-      equations[j][3] = iterations;
-
-         D_LOG_V("eq", equations[j], 4);
-      maxIterations = max(maxIterations, (uint32_t)iterations);
+      //D_LOG_V("EQ", equations[j], 4);
       
    }
-   maxIterations = min(maxIterations, 254);
-    D_LOG("--------", maxIterations);
+   maxIterations = min(maxIterations, 2000);
+   //D_LOG("iterations", maxIterations);
    resetPowerMeasurement();
    
-   ArmAction moveTo;
-    for (uint8_t i = 0; i < maxIterations; i++) {
+   ArmAction movement;
+    for (uint32_t i = 0; i <= maxIterations; i++) {
       for (uint8_t j = 0; j < NUM_JOINTS; j++) {
-        if (i < equations[j][i]) {
-          float* e = equations[j];
-          const float delta = cubic(e[0],e[1],e[2], (float)i /e[3]);
-          moveTo.jointDeltas[j] = delta;
+        float* e = equations[j];
+        if ((float)i <= e[3]) {
+ 
+          const float firstSample = currentState.jointAngles[j];
+          const float nextSample = cubic(e[0],e[1],e[2], startState.jointAngles[j], (float) i/ e[3]);
+          const int8_t delta = max(min(nextSample - firstSample, 126), -126);
+          movement.jointDeltas[j] = delta;
         } else {
-          moveTo.jointDeltas[j] = 0.0;
+          movement.jointDeltas[j] = 0.0;
         }
-      apply(moveTo);
-      delay(50);
-    }
+      }
+      
+      apply(movement);
+      
+      delay(30);
   }
-  return getPowerUsage();
+  return -1.0 * getPowerUsage();
 }
 
 void iterate() {
@@ -109,7 +104,9 @@ void iterate() {
     generatePerturbations();
     for (uint8_t i = 0; i < NUM_PERTURBATIONS; i++) {
       add(perturbations[i], theta, actingTheta, NUM_POLICY_FEATURES);
-      evaluatePolicy();
+      const float evaluation = evaluatePolicy();
+      evaluations[i] = evaluation;
+      D_LOG("eval", evaluation);
     }
     float numUp[NUM_POLICY_FEATURES] = {0};
     float numDown[NUM_POLICY_FEATURES] = {0};
@@ -135,9 +132,15 @@ void iterate() {
 
     for (uint8_t i = 0; i < NUM_PERTURBATIONS; i++) {
       for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
-        averageUp[j] /= numUp[j];
-        averageDown[j] /= numDown[j];
-        averageNone[j] /= numNone[j];
+        if (numUp[j] > 0) {
+          averageUp[j] /= numUp[j];
+        }
+        if (numDown[j] > 0) {
+          averageDown[j] /= numDown[j];
+        }
+        if (numNone[j] > 0) {
+          averageNone[j] /= numNone[j];
+        }
       }
     }
 

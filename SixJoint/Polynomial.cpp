@@ -2,8 +2,8 @@
 #include "math.h"
 #include <Arduino.h>
 #include "Debug.h"
-float cubic(const float alpha, const float beta, const float gamma, const float t) {
-  return alpha * pow(t,3.0) + beta * pow(t,2.0) + gamma * t;
+float cubic(const float alpha, const float beta, const float gamma, const float delta, const float t) {
+  return alpha * pow(t,3.0) + beta * pow(t,2.0) + gamma * t + delta;
 }
 
 float cubicPrime(const float alpha, const float beta, const float gamma, const float t) {

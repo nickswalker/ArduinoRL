@@ -9,6 +9,8 @@ void logVector(const uint8_t vector[], const size_t length);
 
 void logVector(const float vector[], const size_t length);
 
+float absMaxComponent(const float vector[], const size_t length);
+
 void norm(float vector[], const size_t length);
 
 void copy(const float first[], float second[], const size_t length);

@@ -1,7 +1,7 @@
 #ifndef POLYNOMIAL_H
 #define POLYNOMIAL_H
 #define EULER 2.718281828459045235360287471352f
-float cubic(const float alpha, const float beta, const float gamma, const float t);
+float cubic(const float alpha, const float beta, const float gamma, const float delta, const float t);
 
 float cubicPrime(const float alpha, const float beta, const float gamma, const float t);
 

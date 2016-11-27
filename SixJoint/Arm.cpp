@@ -29,6 +29,24 @@ void resetArm() {
     
 }
 
+void moveSmoothlyTo(ArmState& targetState) {
+  ArmAction movement;
+    for (uint8_t i = 0; i <= 200; i++) {
+      bool allZeros = true;
+      for (uint8_t j = 0; j < NUM_JOINTS; j++) {
+        const float delta = targetState.jointAngles[j] - currentState.jointAngles[j];
+        const float clamped = max(min(delta, 1.0), -1.0);
+        movement.jointDeltas[j] = clamped;
+        allZeros &= clamped == 0.0;
+      }
+      if (allZeros) {
+        return;
+      }
+      apply(movement);
+      delay(30);
+  }
+}
+
 void resetArmToRandomPosition() {
     ArmAction randomPosition;
     chooseRandomAction(randomPosition);

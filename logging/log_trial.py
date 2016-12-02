@@ -35,6 +35,8 @@ class Trial:
     def get_per_episode_performance(self) -> Tuple[List[int], List[float]]:
         episode_performance = [[], []]
         for (steps, cumulative_rewards) in self.episodes:
+            if len(cumulative_rewards) == 0:
+                continue
             episode_reward = cumulative_rewards[len(cumulative_rewards) - 1]
             episode_performance[0].append(len(steps))
             episode_performance[1].append(episode_reward)

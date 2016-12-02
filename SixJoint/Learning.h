@@ -5,7 +5,7 @@
 
 #define NUM_POLICY_FEATURES NUM_JOINTS * 4
 #define PERTURBATION_STEP 0.1
-#define DEFAULT_ALPHA 0.05
+#define DEFAULT_ALPHA 0.1
 
 typedef struct ArmState {
     uint8_t jointAngles[NUM_JOINTS];
@@ -19,4 +19,7 @@ void logPolicyParameters();
 void iterate();
 float evaluatePolicy();
 void generatePerturbations();
+void randomlyInitializeWeights();
+void initializeLinearWeights();
+void initializeBestWeights();
 #endif

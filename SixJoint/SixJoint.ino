@@ -8,8 +8,7 @@
 #include "Output.h"
 
 #define EVALUATION_MODE 1
-#define EVALUATION_SWITCH_POINT 50
-#define EVALUATION_MAX_STEPS 200
+#define EVALUATION_SWITCH_POINT 100
 
 extern float alpha;
 
@@ -50,6 +49,8 @@ void setup() {
     setupPowerMeasurement();
 
     moveSmoothlyTo(startState);
+    randomlyInitializeWeights();
+    initializeLinearWeights();
 }
 
 void logEpisodeInformation(float totalReturn) {
@@ -99,6 +100,7 @@ void loop() {
         currentEpisode += 1;
          
     } else {
+      chirpN(2,10);
       iterate();
       float totalReturn = evaluatePolicy();
       logEpisodeInformation(totalReturn);

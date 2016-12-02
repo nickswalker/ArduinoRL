@@ -12,7 +12,7 @@ extern const char spaceString[];
 
 extern Servo servos[];
 
-uint8_t jointRangeMin[] = {10,30,50,50,50,100};
+uint8_t jointRangeMin[] = {10, 30,  50, 50, 50,100};
 uint8_t jointRangeMax[] = {170,150,100,100,100,130};
 
 ArmState currentState = {{0,0,0,0,0,0}};
@@ -58,20 +58,20 @@ void resetArmToRandomPosition() {
 }
 
 void chooseRandomAction(ArmAction &action) {
-    for (uint i = 0; i < NUM_JOINTS; i++) {
+    for (uint8_t i = 0; i < NUM_JOINTS; i++) {
       action.jointDeltas[i] = random(-MAX_JOINT_MOVE_AMOUNT, MAX_JOINT_MOVE_AMOUNT);
     }
 }
 
 void chooseRandomState(ArmState &state) {
-  for (uint i = 0; i < NUM_JOINTS; i++) {
+  for (uint8_t i = 0; i < NUM_JOINTS; i++) {
       state.jointAngles[i] = random(jointRangeMin[i], jointRangeMax[i]);
     }
 }
 
 void actionBetweenStates(const ArmState &from, const ArmState &to, ArmAction &action) {
-  for (uint i = 0; i < NUM_JOINTS; i++) {
-      action.jointDeltas[i] = to.jointAngles[i] - from.jointAngles[i];
+  for (uint8_t i = 0; i < NUM_JOINTS; i++) {
+      action.jointDeltas[i] = (int16_t)to.jointAngles[i] - (int16_t)from.jointAngles[i];
   }
 }
 

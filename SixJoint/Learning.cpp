@@ -9,6 +9,7 @@
 #include "Sense.h"
 #include "Debug.h"
 #include "Arm.h"
+#include "Gaussian.h"
 
 
 #define NUM_PERTURBATIONS NUM_POLICY_FEATURES
@@ -23,12 +24,7 @@ extern ArmState targetState;
 #define P_C(parameters, index) parameters[4 * index + 2u]
 #define P_MV(parameters, index) parameters[4 * index + 3u]
 
-float theta[NUM_POLICY_FEATURES] = {.5, .5, .5, .5, 
-.5, .5, .5, .5,
-.5, .5, .5, .5,
-.5, .5, .5, .5,
-.5, .5, .5, .5,
-.5, .5, .5, .5};
+float theta[NUM_POLICY_FEATURES] = {0};
 float actingTheta[NUM_POLICY_FEATURES] = {0};
 float perturbations[NUM_PERTURBATIONS][NUM_POLICY_FEATURES] = {0};
 
@@ -49,6 +45,7 @@ float evaluatePolicy() {
   moveSmoothlyTo(startState);
   ArmAction deltaToGoal;
   actionBetweenStates(currentState, targetState, deltaToGoal);
+
   float equations[NUM_JOINTS][4];
    uint32_t maxIterations = 0;
    for (uint16_t j = 0; j < NUM_JOINTS; j++) {
@@ -65,7 +62,10 @@ float evaluatePolicy() {
 
       float maximizingT;
       const float curveMaxVelocity = maximizeQuadratic(3.0 * alpha, 2.0 * beta, gamma, maximizingT);
-      const float percentMax =  curveMaxVelocity / 10.0;
+      const float percentMax =  fabs(curveMaxVelocity) / 10.0;
+
+      //D_LOG("CVMT", maximizingT);
+      //D_LOG("CVM", curveMaxVelocity);    
 
       equations[j][0] = alpha;
       equations[j][1] = beta;
@@ -147,14 +147,6 @@ void iterate() {
         averageNone[j] /= (float)numNone[j];
       }
     }
-      
-    D_LOG_V("nup", numUp, NUM_POLICY_FEATURES);
-    D_LOG_V("ndown", numDown, NUM_POLICY_FEATURES);
-    D_LOG_V("nnone", numNone, NUM_POLICY_FEATURES);
-
-    D_LOG_V("aup", averageUp, NUM_POLICY_FEATURES);
-    D_LOG_V("adown", averageDown, NUM_POLICY_FEATURES);
-    D_LOG_V("anone", averageNone, NUM_POLICY_FEATURES);
 
     float delta[NUM_POLICY_FEATURES] = {0};
     for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
@@ -164,16 +156,11 @@ void iterate() {
         delta[j] = averageUp[j] - averageDown[j];
       }
     }
-    D_LOG_V("delta", delta, NUM_POLICY_FEATURES);
     norm(delta, NUM_POLICY_FEATURES);
-    D_LOG_V("norm", delta, NUM_POLICY_FEATURES);
     multiply(alpha, delta, NUM_POLICY_FEATURES);
     D_LOG_V("step", delta, NUM_POLICY_FEATURES);
 
-    D_LOG_V("theta", theta, NUM_POLICY_FEATURES);
     add(theta, delta, NUM_POLICY_FEATURES);
-    D_LOG_V("new theta", theta, NUM_POLICY_FEATURES);
-    
     copy(theta, actingTheta, NUM_POLICY_FEATURES);
     D_LOG_V("acting theta", actingTheta, NUM_POLICY_FEATURES);
 
@@ -185,4 +172,23 @@ void generatePerturbations() {
       perturbations[i][j] = (float)((int)random(3) - 1) * PERTURBATION_STEP;
     }
   }
+}
+
+void randomlyInitializeWeights() {
+  for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
+      theta[j] = randomf(-0.5, 0.5);
+    }
+}
+
+void initializeLinearWeights() {
+  for (uint8_t j = 0; j < NUM_POLICY_FEATURES; j++) {
+    if (j % 3 == 0) {
+      theta[j] = 1.0;
+    } else {
+      theta[j] = 0.0;
+    }
+  }
+}
+
+void initializeBestWeights() {
 }

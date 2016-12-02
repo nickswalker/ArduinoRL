@@ -34,6 +34,11 @@
 \newcommand{\gradv}[1]{\nabla_{\bm{#1}}}
 \newcommand{\thetab}{\bm{\theta}}
 \newcommand{\phib}{\bm{\phi}}
+\newcommand{\bP}{\bm{P}}
+\newcommand{\bs}{\bm{s}}
+\newcommand{\be}{\bm{e}}
+\newcommand{\taub}{\bm{\tau}}
+\newcommand{\sumparams}{\alpha(\bP,\thetab_i) + \beta(\bP, \thetab_i) + \gamma(\bP, \thetab_i) }
 
 \long\def\/*#1*/{}
 
@@ -41,7 +46,7 @@
 %	DOCUMENT INFORMATION
 %----------------------------------------------------------------------------------------
 
-\title{Embedded Agent for Execution-efficient Power-optimal Joint Control}
+\title{Policy Search Approach for Power-efficient Arm Control}
 
 \author{\textsc{Nick Walker}}
 
@@ -57,7 +62,7 @@
 
 \section{Motivation}
 
-Embedded agents, which face memory and compute constraints, have applications in many areas, including space and consumer electronics. In a previous programming assignment, I solved a simple task on a memory-constrained two-joint arm system using a temporal difference learning approach, which was possible because even a coarse representation of the state and action spaces was sufficient to achieve good performance. In many problems however, we would like to achieve higher, near-optimal levels of performance. In this report, I investigate a complex joint control task, one such problem where near-optimal behavior is highly desirable and examine how a learning approach might be applied.
+Motors consume substantial amounts of power, so it is important for a battery-powered mobile robotics systems to have an efficient motor usage policy. There are two components to an efficient motor policy. \textit{Utilization efficiency}, making movements only as necessary, and \textit{execution efficiency}, using joints to actuate movements as efficiently as possible. Speed is not the only component of execution efficiency. In some systems, there may be ways of using properties of the environment to transition between joint poses while  applying less torque. In an arm system for instance, a policy might use gravity to help it move towards the target configuration, even if it takes longer than a direct transition. While it is possible to plan power-optimal trajectories given a full model of the system, such models may be expensive or impossible to obtain. For these reasons, a learning approach, which can adapt to the idiosyncrasies of an individual platform, is of interest. In this project, I evaluate a policy search approach for optimizing a robotic arm's execution efficiency.
 
 
 %----------------------------------------------------------------------------------------
@@ -109,99 +114,33 @@ In order to provide a challenging task for the agent, I built a six degree of fr
 
 \subsection{Problem}
 
-Motors consume a substantial amount of power, so it is important for a battery-powered mobile system to have an efficient motor usage policy. There are two components to an efficient motor policy. \textit{Utilization efficiency}, making movements only as necessary, and \textit{execution efficiency}, using joints to actuate movements as efficiently as possible. Speed is not the only component of execution efficiency. Motors consume power proportional to the torque they apply, so in some systems, there may ways of using properties of the environment to transition between joint poses that require less torque. In the arm system for instance, a policy that moves in such a way that gravity pulls joints towards the target configuration may be more power efficient, even if it takes longer than a direct transition. With a good model of the system, it is possible to engineer a power-optimal execution policy, however such models may be expensive or impossible to obtain. Further, because the model will be imperfect, small differences, like the precise angles of the joints or the quality of the motors may change the optimal policy. For these reasons, a learning approach, which can adapt to the idiosyncrasies of an individual platform, is interesting.
+The arm is given a command $\bP$ consisting of initial and ending poses (joint angles).
 
-Additionally, power consumption is an interesting proxy for joint state. I did not use feedback servos, so the agent must assume that all actions get executed within some fixed window after they are issued. If the arm enters a bad configuration, e.g. hitting an immovable object, power consumption will spike as the servo controller applies more torque. Penalizing current draw indirectly discourages dangerous configurations.
+\begin{equation}
+	\bP = [\bm{i}, \be]\\
+\end{equation}
 
-The agent must move all of its joints into a target pose, using as little energy as possible. A sample of the instantaneous current usage is taken during each action execution.
-
-\[ r(s,a,s') =  \left\{
-\begin{array}{ll}
-	50 & \text{if all joint angles are match the target pose} \\
-	-current & \text{otherwise} \\
-\end{array} 
-\right. \]
+The agent must move all of its joints into the end pose, using as little energy as possible. The current usage of the system is monitored continuously, and the agent is given the negative power usage of its trajectory as its reward.
 
 
-\subsection{Learning Approaches}
+\subsection{Approach}
 
-\subsection{Value Function Based?}
+The servo controller library used for this project allows joint angles to be specified with single degree precision, making the space of possible joint configurations and actions essentially continuous. Value function methods face significant challenges in such a domain, and are infeasible given the platform constraints of this problem, so a policy search method must be used.
 
-The servo controller library used for this project allows joint angles to be specified with single degree precision. The space of possible joint configurations and actions is large enough to be essentially continuous. In my previous project, I coarse coded the states and restricted the action set to make the problem fit within the system's memory constraints, but this made it impossible for the agent to represent the optimal policy. If we would like to achieve better than minimally-functional policies, we need to use a more flexible representation, but the scale of the problem means that .
+The book presents one possible policy parameterization for a continuous state-action problem, a normal distribution over a scalar real-valued action with parameterized mean and variance. This form of policy doesn't encode the useful knowledge that the trajectory must always end at the target configuration.
 
-\subsection{Policy Gradient}
+I instead chose to provide a custom policy. For initial arm pose $\bm{i}$ and end arm pose $\bm{e}$, a joint $j_i$'s angle at time $t$ is given by a cubic polynomial interpolation from $s_i$ to $e_i$. The polynomial's coefficients must be positive, and are modeled as the exponentiation of a linear function of the start and end arm pose and per-joint weights. To ensure safe operation, individual joint trajectories are executed slower or faster such that, for $t$ in $[0,1]$, they have a maximum angular velocity of exactly $10\degree$/s. An additional per-joint parameter, $\delta$ allows the curve velocity to be scaled down further, preserving the ability to represent policies that move joints slowly.
+\begin{gather}
+	\bm{T} = [\thetab_0, \thetab_1, \thetab_2, \thetab_3, \thetab_4, \thetab_5]\\
+	\thetab_i = [\taub_\alpha, \taub_\beta, \taub_\gamma, \taub_\delta] \\
+	j_i(t, \bP | \bm{T}) = \be_i\bigg (\frac{\alpha(\bP,\thetab_i) t^3 + \beta(\bP, \thetab_i) t^2 + \gamma(\bP, \thetab_i) t}{\sumparams}\bigg) + \bm{i}_i\\
+	\alpha(\bP,\thetab_i) = \exp(\taub_\alpha^\top \phib_s)\\
+	\beta(\bP,\thetab_i) = \exp(\taub_\beta^\top \phib_s)\\
+	\gamma(\bP,\thetab_i) = \exp(\taub_\gamma^\top \phib_s)\\	
+	\delta(\bP,\thetab_i) = \frac{1}{\exp(\taub_\delta^\top \phib_s) + 1}
+\end{gather}
 
-For this task, policies are much easier to model and optimize over than value functions. This suggests that a policy gradient approach may be appropriate. 
-
-\subsubsection{Policy Representation}
-The book provides one possible policy parameterization for a continuous state-action problem,
-
-\begin{gather*}
-	\pi (a | s, \thetab) =  \frac{1}{\sigma(s, \thetab)\sqrt{2\pi}}\exp\bigg({-\frac{(a - \mu(s, {\thetab}))^2}{2\sigma(s, \thetab)})}\bigg)\\
-	\thetab = [\thetab^\mu, \thetab^\sigma] \\
-	\mu(s, \thetab) = \thetab^{\mu\top}\phib\\
-	\sigma(s, \thetab) = \exp(\thetab^{\sigma\top}\phib)\\
-	\exp(x) = e^x\\
-\end{gather*}
-
-where $a$ is a scalar real-valued action. Because the agent has to pick six joint movements at each time step, this representation can simply be instantiated once for each joint, and each weight matrix can be learned independently. This is not ideal because the distribution of movements for a single joint should be influenced by the distributions of the other joints. A better policy representation might be the multivariate normal distribution,
-
-\begin{gather*}
-	\pi (\bm{a} | s, \thetab) =  \frac{1}{\sqrt{(2\pi)^k|\bm{\Sigma}(s, \thetab)|}} \exp\bigg(-(\bm{a} - \bm{\mu}(s, {\thetab}))^\top \bm{\Sigma}(s, \thetab)^{-1}{(\bm{x} - \bm{\mu}(s, \thetab))}\bigg)\\
-		\bm{\Sigma}(s, \thetab) =\quad?\\
-		\bm{\mu}(s, {\thetab}) =\quad?\\
-\end{gather*}
-where $\bm{\Sigma}$ is the covariance matrix and $|\bm{\Sigma}|$ is its determinant. However, it is not clear how best to parameterize a representation of $\bm{\mu}$ and $\bm{\Sigma}$, and the derivation of its gradient is more complicated. For this project, I will use six independent normal policies.
-
-\subsubsection{Learning Algorithm}
-
-With only 32kb of RAM available, it is important to select an algorithm with minimal overhead and update complexity so that the bulk of memory can be used for storing weights. The book provides two approaches. REINFORCE does its weight updates at the end of an episode once the full return is known. Joint angles and deltas fit in a single byte, and rewards are 4 byte floats, so we can compactly represent a stored S-A-R tuple in 16 bytes. Each update requires the calculation of the gradient which can be done with $|\thetab|$ stack space.
-
-We can define inequalities that make the memory tradeoffs clear. For REINFORCE:
-
-\begin{gather*}
- \underbrace{13 \cdot (|\phib| \cdot 4\text{b})}_{\text{two feature vectors per joint + one on stack}} +  \underbrace{16\text{b} \cdot s}_{\text{max step history}} < 32\text{kb}
-\end{gather*}
-
-
-Because REINFORCE doesn't update until the end of an episode, it will take some time for the agent to begin climbing the gradient. It isn't clear what the best value for the maximum number of steps in an episode should be. Clearly, it should be high enough that the agent can feasibly reach the goal, but not so high that it allows the agent to wander for too long between updates.
-
-One-step Actor Critic augments REINFORCE by learning a state-value function so it can bootstrap during an episode. The parameterization of the value function need not be the same as state features used for the policy weights, but for simplicity I will estimate the memory footprint assuming that both are the same. This adds another set of weights to store, but removes the need to store an episode history and accelerates learning.
-
-\begin{gather*}
-\underbrace{19 \cdot (|\phib| \cdot 4\text{b})}_{\text{three feature vectors per joint, one on stack}}  < 32\text{kb}
-\end{gather*}
-
-Actor Critic allows about 400 state features, while REINFORCE allows 500 assuming the max episode size is fixed at 200 steps.
-
-The additional features allowed by REINFORCE are not significant enough to outweight the benefits of faster learning, so I chose One-step Actor Critic. A memory conscious implementation is provided below.
-\newcommand{\bw}{\bm{w}}
-\begin{algorithm}
-	\caption{Memory-conscious One-step Actor Critic}
-	\label{alg:update}
-	\begin{algorithmic}[1] % The number tells where the line numbering should start
-		\Procedure{Update}{$S$, $A$, \bm{$\theta$}}
-		\State $A \gets $ choose action according to $\pi(\cdot|S,\thetab)$
-		\State Allocate \bm{$x$} to be a vector the size of \bm{$\theta$}, and floats $r$ and $a$
-		\State $r\gets r(S_t$, $A_t$, $S_{t+1}$)
-		\State $\bm{x} \gets \phib(S_{t+1}, A_{t+1})$ \Comment store $\phib_{t+1}$
-		\State $a \gets \thetab^\top \bm{x}$ \Comment calculate $v(S_{t+1},A_{t+1})$ so we can discard $\phib_{t+1}$
-		\State $\bm{x} \gets \phib(S_{t}, A_{t})$ \Comment store $\phib_t$
-		\State $a \gets r + \gamma v - \thetab^\top \bm{x}$ \Comment $a$ is now the bracketed term in eq. $\ref{eqn:update}$
-		\State $\bm{x} \gets (\alpha \space a)\bm{x}$ \Comment $\bm{x}$ is now the weight update
-		\State \bm{$\theta} \gets \thetab + x$
-		\
-		\EndProcedure
-	\end{algorithmic}
-\end{algorithm}
- 
-
-\subsubsection{State Features}
-
-I used a simple discretization of the state space. The range of each joint was divided into 8\space\space20\degree\space sections. The two sets of section features along with a binary feature for the LED state were then gridded, resulting in 128 mutually exclusive binary features. 
-
-
-	
+This policy, including the safety transformation, is differentiable, but the gradient calculation is complex and challenging to implement given the memory constraints of the platform. In the interest of evaluating the cubic polynomial interpolation policy format quickly, I used the finite difference algorithm from \cite{stone2006} and directly sampled the gradient instead of computing it. Because this approach requires a number of rollouts proportional to the size of $\thetab$,  I restricted my evaluation of the approach to a fixed $\bm{s}$ and $\bm{e}$, reducing the problem to direct optimization of $\alpha$, $\beta$, $\gamma$, and $\delta$ for each joint.
 	
 
 %----------------------------------------------------------------------------------------
@@ -210,8 +149,7 @@ I used a simple discretization of the state space. The range of each joint was d
 
 \section{Experimental Setup}
 
-
-The agent learns for 50 episodes using $\alpha =$ 0.2, $\gamma =$ 0.99,  following an $\epsilon$-greedy policy with $\epsilon=$ 0.1. Then, the agent operates in an evaluation mode for 50 episodes with $\alpha=\epsilon=0.0$. During this period, episodes are limited to 200 steps in case the agent executes a policy that never reaches the goal. A small delay is used between action execution and sensing to allow the arm to settle. The photocell threshold is calibrated before every session to prevent spurious activations.
+The agent is allowed to execute 100 iterations of the algorithm. Each iteration, it performs 24 rollouts to sample the gradient, using parameters perturbed by one of $[-0.1, 0.0, 0.1]$. A step size of 0.05 is used to update the parameters after the gradient is sampled, then an evaluation of the new weights is recorded.
 
 %----------------------------------------------------------------------------------------
 %	SECTION 4
@@ -224,7 +162,7 @@ The agent learns for 50 episodes using $\alpha =$ 0.2, $\gamma =$ 0.99,  followi
 	\begin{figure}[h]
 		\begin{center}
 			%\includegraphics[width=\textwidth]{figure_0.pdf}
-			\caption{The agent's performance. The first 50 episodes are learning time, the rest are evaluations. Due to the time expense of collecting data from the robot, I could only run ten trials. Still, within reasonable confidences, the agent's evaluation averages a reward of 44, demonstrating that it was able to quickly point the LED towards the photocell from arbitrary start positions.}
+			\caption{Results of an evaluation}
 		\end{center}
 	\end{figure}
 	
@@ -235,13 +173,14 @@ The agent learns and generalizes a fairly good policy within its first fifty ste
 Even though it points the LED at the photocell consistently, the agent does not learn the LED reward dynamics. As can be seen in the video\footnote{https://youtu.be/SCv1AomFDG0}, it opts to leave the light on at all times. This is not unexpected, since it lacks features that describe the interaction of the joint position with the value of actions that turn the LED on. The weight associated with the LED activation action-feature is forced to represent the value of LED actions from any state. Averaged across the entire state space, turning the light on has a higher value than turning it off, so it always leaves it on. Efficient LED activation is not as important as joint movement, so it seems reasonable to prioritize detailed state-space representation over features that would better capture the use of the light.
 
 
+
 %----------------------------------------------------------------------------------------
 %	SECTION 5
 %----------------------------------------------------------------------------------------
 
 \section{Conclusions}
 
-I have demonstrated that it is possible to implement an embedded agent that achieves good performance on an arm control task, even with extraordinary memory constraints. Further work could investigate more sophisticated features, or explore the performance and memory characteristics of policy gradient methods in the same domain.
+
 
 \clearpage
 
@@ -288,60 +227,6 @@ I have demonstrated that it is possible to implement an embedded agent that achi
 		
 	\end{tabular}
 \end{center}
-	
-\section{Appendix C: Derivation of the Gradient}
-
-The book does not provide the gradient for the parameterized normal policy and I was not able to quickly find it elsewhere. Its derivation is included as an exercise. $\phi(s)$ is abbreviated $\phib$
-\begin{gather*}
-\pi (a | s, \thetab) =  \frac{1}{\sigma(s, \thetab)\sqrt{2\pi}}\exp\bigg({-\frac{(a - \mu(s, {\thetab}))^2}{2\sigma(s, \thetab)})}\bigg)\\
-\thetab = [\thetab^\mu, \thetab^\sigma] \\
-\mu(s, \thetab) = \thetab^{\mu\top}\phib\\
-\sigma(s, \thetab) = \exp(\thetab^{\sigma\top}\phib)\\
-\exp(x) = e^x\\
-\end{gather*}
-\begin{align*}
-\grad{\thetab} \log\pi (a | s, \thetab) &= \grad{\thetab} \log \bigg[ \frac{1}{\exp(\thetab^
-	{\sigma\top}\phib)\sqrt{2\pi}}\exp\bigg(- \frac{(a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\bigg)\bigg]\\
-&= \grad{\thetab}\log[\text{AB}] \\
-&= \big[\grad{\thetab^\mu} \log[\text{AB}],\quad\grad{\thetab^\sigma}\log[\text{AB}]\big]  \quad\text{(by definition of theta)}\\
-&= \big[\grad{\thetab^\mu}[\log\text{A}]+ \grad{\thetab^\mu}[\log\text{B}],\quad \grad{\thetab^\sigma}[\log\text{A}]+ \grad{\thetab^\sigma}[\log\text{B}]\big]  \quad\text{(by log rules)}\\
-&= \bigg[\frac{{-\phib} (a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}  ,\quad {-\phib} + \frac{{\phib} (a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)} \bigg] \\
- \\
-\end{align*}
-\subsection{Gradient with respect to $\bm{\theta}^\mu$}
-\begin{align*}
-\grad{\thetab^\mu} \log\text{A} &= \grad{\thetab^\mu} \log \bigg[\frac{1}{\exp(\thetab^
-	{\sigma\top}\phib)\sqrt{2\pi}}\bigg]\\
-&=  0\\
-\end{align*}
-\begin{align*}
-\grad{\thetab^\mu} \log \text{B} &= \grad{\thetab^\mu} \log \bigg[ \exp\bigg(- \frac{(a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\bigg)\bigg]\\
-&= \grad{\thetab^\mu} \bigg[-\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
-&= \grad{\thetab^\mu} \bigg[-\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2\bigg] \exp(\thetab^{\sigma\top}\phib)^{-1} + -\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2 \grad{\thetab^\mu} \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
-&= \grad{\thetab^\mu} \bigg[-\frac{1}{2} (a - \thetab^{\mu\top}\phib)^2\bigg] \exp(\thetab^{\sigma\top}\phib)^{-1} + \quad 0\\
-&= -(a - \thetab^{\mu\top}\phib)\grad{\thetab^\mu} \bigg[a - \thetab^{\mu\top}\phib\bigg] \exp(\thetab^{\sigma\top}\phib)^{-1} \\
-&= \frac{{\phib}(a - \thetab^{\mu\top}\phib) }{\exp(\thetab^{\sigma\top}\phib)}\\
-\end{align*}
-\clearpage
-\subsection{Gradient with respect to $\bm{\theta}^\sigma$}
-\begin{align*}
-	\grad{\thetab^\sigma} \log \text{A} &= \grad{\thetab^\sigma} \log \bigg[\frac{1}{\exp(\thetab^
-		{\sigma\top}\phib)\sqrt{2\pi}}\bigg]\\
-&= \grad{\thetab^\sigma} \log \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1} \frac{1}{\sqrt{2\pi}}\bigg]\\
-&= \grad{\thetab^\sigma} \bigg[-(\thetab^{\sigma\top}\phib) \bigg] + \grad{\thetab^\sigma} \bigg[ \log \frac{1}{\sqrt{2\pi}}\bigg]\\
-&=  {-\phib}\\
-\end{align*}
-
-\begin{align*}
-\grad{\thetab^\sigma} \log \text{B} &= \grad{\thetab^\sigma} \log \bigg[ \exp\bigg(- \frac{(a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\bigg)\bigg]\\
-&=\grad{\thetab^\sigma} \bigg[ - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
-&=\grad{\thetab^\sigma} \bigg[ - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2\bigg]\exp(\thetab^{\sigma\top}\phib)^{-1} +  - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2 \grad{\thetab^\sigma} \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
-&=0\quad +\quad  - \frac{1}{2}(a - \thetab^{\mu\top}\phib)^2 \grad{\thetab^\sigma} \bigg[\exp(\thetab^{\sigma\top}\phib)^{-1}\bigg]\\
-&= \frac{{\phib} (a - \thetab^{\mu\top}\phib)^2}{2\exp(\thetab^{\sigma\top}\phib)}\\
-\end{align*}
-
-
-
 
 	
 \end{document}

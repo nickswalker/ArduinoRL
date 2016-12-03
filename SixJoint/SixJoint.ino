@@ -7,9 +7,6 @@
 #include "Strings.h"
 #include "Output.h"
 
-#define EVALUATION_MODE 1
-#define EVALUATION_SWITCH_POINT 100
-
 extern float alpha;
 
 extern const char spaceString[];
@@ -51,6 +48,8 @@ void setup() {
     moveSmoothlyTo(startState);
     randomlyInitializeWeights();
     initializeLinearWeights();
+    //initializeBestWeights();
+    logPolicyParameters();
 }
 
 void logEpisodeInformation(float totalReturn) {
@@ -83,6 +82,11 @@ bool checkForResetSignal(){
 
 
 void loop() { 
+    /*while(true) {
+      const float result = evaluatePolicy();
+      Serial.println(result);
+    }*/
+  
     if (checkForResetSignal()) {
         chirpN(3,5);
         resetArmToRandomPosition();
@@ -91,26 +95,12 @@ void loop() {
         markTrialStart();
     }
 
-    if (EVALUATION_MODE && currentEpisode > EVALUATION_SWITCH_POINT) {
-        chirp();
-        alpha = 0.0;
-        float totalReturn = evaluatePolicy();
-        logEpisodeInformation(totalReturn);
-        markEpisodeEnd();
-        currentEpisode += 1;
-         
-    } else {
-      chirpN(2,10);
-      iterate();
-      float totalReturn = evaluatePolicy();
-      logEpisodeInformation(totalReturn);
-      markEpisodeEnd();
-      currentEpisode += 1;
-    }
-
-    
-
-    
+    chirpN(5,20);
+    iterate();
+    float totalReturn = evaluatePolicy();
+    logEpisodeInformation(totalReturn);
+    markEpisodeEnd();
+    currentEpisode += 1;
     
 } 
 

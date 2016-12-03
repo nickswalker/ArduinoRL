@@ -2,7 +2,6 @@ import os
 from typing import List, Tuple
 
 import numpy as np
-import serial
 
 episode_end_marker = "***"
 theta_marker = "["

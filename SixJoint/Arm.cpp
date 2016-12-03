@@ -23,8 +23,7 @@ void resetArm() {
     for (uint i = 0; i < NUM_JOINTS; i++) {
       middlePosition.jointAngles[i] = ((uint16_t)jointRangeMin[i] + (uint16_t)jointRangeMax[i]) / 2;
     }
-    // Could have to move quite a bit to reset.
-    delay(700);
+    moveSmoothlyTo(middlePosition);
     currentState = previousState = middlePosition;
     
 }
@@ -48,11 +47,9 @@ void moveSmoothlyTo(ArmState& targetState) {
 }
 
 void resetArmToRandomPosition() {
-    ArmAction randomPosition;
-    chooseRandomAction(randomPosition);
-    apply(randomPosition);
-    // Could have to move quite a bit to reset.
-    delay(700);
+    ArmState randomPosition;
+    chooseRandomState(randomPosition);
+    moveSmoothlyTo(randomPosition);
     previousState = currentState;
     
 }

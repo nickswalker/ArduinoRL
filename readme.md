@@ -2,6 +2,8 @@
 
 A couple of projects implementing reinforcement learning approaches to problems in arm control.
 
+See the [two joint readme](TwoJoint/readme.md) or the [six joint readme](SixJoint/readme.md) for more.
+
 Also includes:
 
 * Logging utilities (written in Python) to parse data sent over serial

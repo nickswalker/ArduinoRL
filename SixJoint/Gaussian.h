@@ -1,9 +1,10 @@
 #ifndef GAUSSIAN_H
 #define GAUSSIAN_H
+#include "Debug.h"
 
+const uint16_t intMax = ~0;
 float randomf(const float min, const float max) {
-  uint32_t intMax = ~0u;
-  float normalized = random(intMax) / float(intMax);
+  float normalized = float(random(intMax)) / float(intMax);
   return min + normalized * (max - min);
 }
 

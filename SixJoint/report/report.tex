@@ -22,8 +22,10 @@
 
 \usepackage{amssymb}
 \usepackage{tikz}
+\usepackage{pgfplots}
 \usetikzlibrary{arrows,shapes}
 
+\usepgfplotslibrary{groupplots}
 \tikzset{every picture/.style={remember picture}}
 
 \setlength\parindent{0pt} % Removes all indentation from paragraphs
@@ -60,9 +62,36 @@
 %	SECTION 1
 %----------------------------------------------------------------------------------------
 
+\def\expx(#1){e^(#1)}
+
+\def\FunctionF(#1,#2,#3,#4){((#2)*(#1)^3 + (#3)*(#1)^2 + (#4)*(#1)) / ((#2) + (#3) + (#4) )}
+\def \GraphJoint(#1,#2,#3){
+	\nextgroupplot[%
+		axis y line=center,
+		axis x line=middle, 
+		axis on top=false,
+		xmin=0,
+		xmax=1,
+		ymin=-0.4,
+		ymax=1,
+		height=3.75cm,
+		width=3.0cm,
+		grid,
+		xtick={0,0.2,...,1},
+		ytick={-0.4,-0.2,...,1},
+		yticklabel=\empty,
+		xticklabel=\empty,
+		axis line style = thick
+		]
+		\addplot [domain=0:1, samples=50, mark=none, ultra thick, blue] {\FunctionF(x,#1,#2,#3)};
+
+	}
+
+
+
 \section{Motivation}
 
-Motors consume substantial amounts of power, so it is important for a battery-powered mobile robotics systems to have an efficient motor usage policy. There are two components to an efficient motor policy. \textit{Utilization efficiency}, making movements only as necessary, and \textit{execution efficiency}, using joints to actuate movements as efficiently as possible. Speed is not the only component of execution efficiency. In some systems, there may be ways of using properties of the environment to transition between joint poses while  applying less torque. In an arm system for instance, a policy might use gravity to help it move towards the target configuration, even if it takes longer than a direct transition. While it is possible to plan power-optimal trajectories given a full model of the system, such models may be expensive or impossible to obtain. For these reasons, a learning approach, which can adapt to the idiosyncrasies of an individual platform, is of interest. In this project, I evaluate a policy search approach for optimizing a robotic arm's execution efficiency.
+Motors consume substantial amounts of power, so it is important for a battery-powered mobile robotics systems to have an efficient motor usage policy. There are two components to an efficient motor policy. \textit{Utilization efficiency}, making movements only as necessary, and \textit{execution efficiency}, using joints to actuate movements as efficiently as possible. Speed is not the only component of execution efficiency. In some systems, there may be ways of using properties of the environment to transition between joint poses while  applying less torque. While it is possible to plan power-optimal trajectories given a full model of the system, such models may be expensive or impossible to obtain. A learning approach, which can adapt to the idiosyncrasies of an individual platform, may address these problems. In this project, I evaluate a policy search approach for optimizing a robotic arm's execution efficiency.
 
 
 %----------------------------------------------------------------------------------------
@@ -73,7 +102,29 @@ Motors consume substantial amounts of power, so it is important for a battery-po
 
 \subsection{Learning Platform}
 
-I based the platform on the Teensy 3.2, an ARM Cortex-M4 development board. Compared to the popular AVR microcontrollers, ARM chips are substantially more powerful, and not much more expensive. Though both chips lack a floating point unit, ARM cores have an emulation advantage due to the their higher clock speed and native 32-bit operation capabilities. The Cortex line has seen substantial commercial use, so evaluating an embedded agent using the M4 provides useful insight into the constraints of real systems are.
+The agent controls a six degree-of-freedom arm, constructed from a low-cost commercial kit. Each joint is an MTR955 servo with a varying range of motion as imposed by the arm design. The arm's current usage is continuously monitored using an ACS712 30A current sensor sampled with 16 bit resolution at 100Hz. The sensor was not calibrated against a known load, so the scale of the readings is not interpretable. However, relative readings can still be used to judge efficiency gains.
+
+\begin{center}
+	\begin{tabular}{ l l l}
+		Joint & Usable rotation range ($\deg$)  \\ \midrule
+		0 & 160 \\
+		1 & 120 \\
+		2 & 50 \\
+		3 & 50 \\
+		4 & 50\\ 
+		5 & 30
+	\end{tabular}
+\end{center}
+
+\begin{figure}
+	\centering
+	\includegraphics[width=10cm]{photos/eagle.jpg}
+	\includegraphics[width=10cm]{photos/side.jpg}
+	\caption{Top: The learning platform. Five joints control the articulation of the arm, while the sixth opens and closes the grasper.}
+	\label{fig:platform}
+\end{figure}
+
+All learning occurs directly on a Teensy 3.2 development board, which provides an ARM Cortex-M4 microcontroller. This chip's additional resources beyond cheaper alternatives, like the common AtMega328p, are necessary to absorb multi-task overhead and to avoid stack overflows.
 
 \begin{center}
 	\begin{tabular}{ l l l}
@@ -88,59 +139,38 @@ I based the platform on the Teensy 3.2, an ARM Cortex-M4 development board. Comp
 	\end{tabular}
 \end{center}
 
-In order to provide a challenging task for the agent, I built a six degree of freedom arm. The arm's joints are MTR955 servos, each capable of 170$\degree$ of rotation, though some joints have less range of motion to physical constraints.
-
-\begin{center}
-	\begin{tabular}{ l l l}
-		Joint & Rotation range ($\deg$)  \\ \midrule
-		0 & 160 \\
-		1 & 120 \\
-		2 & 50 \\
-		3 & 50 \\
-		4 & 50\\ 
-		5 & 30
-		
-	\end{tabular}
-\end{center}
-
-\begin{figure}
-	\centering
-	%\includegraphics[width=10cm]{../photos/eagle_small.jpg}
-	%\includegraphics[width=10cm]{../photos/arm_detail_small.jpg}
-	\caption{Top: The learning platform. Five joints control the articulation of the arm, while the sixth opens and closes the grasper.}
-	\label{fig:platform}
-\end{figure}
-
 
 \subsection{Problem}
 
-The arm is given a command $\bP$ consisting of initial and ending poses (joint angles).
+The arm is given a command $\bP$ consisting of initial and ending poses, specifying each joint angle.
 
 \begin{equation}
 	\bP = [\bm{i}, \be]\\
 \end{equation}
 
-The agent must move all of its joints into the end pose, using as little energy as possible. The current usage of the system is monitored continuously, and the agent is given the negative power usage of its trajectory as its reward.
+The agent must move all of its joints into the end pose, using as little energy as possible. The agent is given the negative power usage of its trajectory as its reward.
 
 
 \subsection{Approach}
 
-The servo controller library used for this project allows joint angles to be specified with single degree precision, making the space of possible joint configurations and actions essentially continuous. Value function methods face significant challenges in such a domain, and are infeasible given the platform constraints of this problem, so a policy search method must be used.
+The servo controller library used for this project allows joint angles to be specified with single degree precision, making the space of possible joint configurations and actions essentially continuous. Value function methods face significant challenges in such a domain, and are infeasible given the platform's computational constraints, so a policy search method must be used.
 
-The book presents one possible policy parameterization for a continuous state-action problem, a normal distribution over a scalar real-valued action with parameterized mean and variance. This form of policy doesn't encode the useful knowledge that the trajectory must always end at the target configuration.
+The book presents one possible policy parameterization for a continuous state-action problem, a normal distribution over a scalar real-valued action with parameterized mean and variance. This form of policy isn't suited for multivariate actions and doesn't encode the useful knowledge that the trajectory must always end at the target configuration.
 
-I instead chose to provide a custom policy. For initial arm pose $\bm{i}$ and end arm pose $\bm{e}$, a joint $j_i$'s angle at time $t$ is given by a cubic polynomial interpolation from $s_i$ to $e_i$. The polynomial's coefficients must be positive, and are modeled as the exponentiation of a linear function of the start and end arm pose and per-joint weights. To ensure safe operation, individual joint trajectories are executed slower or faster such that, for $t$ in $[0,1]$, they have a maximum angular velocity of exactly $10\degree$/s. An additional per-joint parameter, $\delta$ allows the curve velocity to be scaled down further, preserving the ability to represent policies that move joints slowly.
+I chose to provide a more tailored policy form. For initial arm pose $\bm{i}$ and end arm pose $\bm{e}$, a joint $j_i$'s angle at time $t$ is given by a cubic polynomial interpolation from $s_i$ to $e_i$. The polynomial's coefficients are modeled as a linear function of the start and end arm pose. To ensure safe operation, individual joint trajectories are executed slower or faster such that, for $t$ in $[0,1]$, they have a maximum angular velocity of exactly $10\degree$/s. An additional per-joint parameter, $\delta$ allows the curve velocity to be scaled down further, preserving the ability to represent policies that move joints slowly. $\delta$ is modeled by a function with range [0,1].
 \begin{gather}
 	\bm{T} = [\thetab_0, \thetab_1, \thetab_2, \thetab_3, \thetab_4, \thetab_5]\\
 	\thetab_i = [\taub_\alpha, \taub_\beta, \taub_\gamma, \taub_\delta] \\
-	j_i(t, \bP | \bm{T}) = \be_i\bigg (\frac{\alpha(\bP,\thetab_i) t^3 + \beta(\bP, \thetab_i) t^2 + \gamma(\bP, \thetab_i) t}{\sumparams}\bigg) + \bm{i}_i\\
-	\alpha(\bP,\thetab_i) = \exp(\taub_\alpha^\top \phib_s)\\
-	\beta(\bP,\thetab_i) = \exp(\taub_\beta^\top \phib_s)\\
-	\gamma(\bP,\thetab_i) = \exp(\taub_\gamma^\top \phib_s)\\	
-	\delta(\bP,\thetab_i) = \frac{1}{\exp(\taub_\delta^\top \phib_s) + 1}
+	j_i(t, \bP | \bm{T}) = \bm{i}_i + (\be_i - \bm{i}) \bigg(\frac{\alpha(\bP,\thetab_i) t^3 + \beta(\bP, \thetab_i) t^2 + \gamma(\bP, \thetab_i) t}{\sumparams}\bigg)\\
+	\alpha(\bP,\thetab_i) = \taub_\alpha^\top \phib_P\\
+	\beta(\bP,\thetab_i) = \taub_\beta^\top \phib_P\\
+	\gamma(\bP,\thetab_i) = \taub_\gamma^\top \phib_P\\	
+	\delta(\bP,\thetab_i) = \frac{1}{\exp(-\taub_\delta^\top \phib_P) + 1}
 \end{gather}
 
-This policy, including the safety transformation, is differentiable, but the gradient calculation is complex and challenging to implement given the memory constraints of the platform. In the interest of evaluating the cubic polynomial interpolation policy format quickly, I used the finite difference algorithm from \cite{stone2006} and directly sampled the gradient instead of computing it. Because this approach requires a number of rollouts proportional to the size of $\thetab$,  I restricted my evaluation of the approach to a fixed $\bm{s}$ and $\bm{e}$, reducing the problem to direct optimization of $\alpha$, $\beta$, $\gamma$, and $\delta$ for each joint.
+Note that the polynomial term in equation 4 fails when the parameters sum to 0. In this case, the joint trajectory is taken to be a linear interpolation between the input poses.
+
+This policy, including the safety transformation, is differentiable, but the gradient calculation is complex and challenging to implement given the memory constraints of the platform. In the interest of evaluating the cubic polynomial interpolation policy format quickly, I used the finite difference algorithm from the Aibo walk paper and directly sampled the gradient instead of computing it. Because this approach requires a number of rollouts proportional to the size of $\thetab$,  I restricted my evaluation of the approach to a fixed $\bm{s}$ and $\bm{e}$, reducing the problem to direct optimization of $\alpha$, $\beta$, $\gamma$, and $\delta$ for each joint.
 	
 
 %----------------------------------------------------------------------------------------
@@ -149,7 +179,7 @@ This policy, including the safety transformation, is differentiable, but the gra
 
 \section{Experimental Setup}
 
-The agent is allowed to execute 100 iterations of the algorithm. Each iteration, it performs 24 rollouts to sample the gradient, using parameters perturbed by one of $[-0.1, 0.0, 0.1]$. A step size of 0.05 is used to update the parameters after the gradient is sampled, then an evaluation of the new weights is recorded.
+The agent is allowed to execute 100 iterations of the algorithm. It performs 24 rollouts to sample the gradient, using parameters perturbed by one of $[-0.1, 0.0, 0.1]$. A step-size of 0.1 in the direction of the normalized gradient is used to update the parameters, then an evaluation of the new weights is recorded. A fixed initial pose and end pose are used.
 
 %----------------------------------------------------------------------------------------
 %	SECTION 4
@@ -158,61 +188,60 @@ The agent is allowed to execute 100 iterations of the algorithm. Each iteration,
 
 \section{Results}
 
+\begin{figure}[H]
+	\includegraphics[width=\textwidth]{figure0.pdf}
+	\caption{Learning performance with parameters randomly initialized in [0.0, 0.5].}
+\end{figure}
 
-	\begin{figure}[h]
-		\begin{center}
-			%\includegraphics[width=\textwidth]{figure_0.pdf}
-			\caption{Results of an evaluation}
-		\end{center}
-	\end{figure}
+
+\begin{figure}[H]
+	\begin{center}
+		\includegraphics[width=\textwidth]{figure1.pdf}
+		\begin{tikzpicture}
+		\begin{groupplot}[group style={group size=6 by 1, horizontal sep=0.6cm, vertical sep=0cm}]
+		\GraphJoint(0.06, -0.03, 0.97)
+		\GraphJoint(0.05, 0.03, 1.13)
+		\GraphJoint(0.15, 0.15, 1.18)
+		\GraphJoint(-0.06, 0.10, 1.28)
+		\GraphJoint(-0.12, 0.20, 1.23)
+		\GraphJoint(0.03, -0.05, 1.00)
+		
+		\end{groupplot}
+		\end{tikzpicture}
+		\caption{Learning performance from a fast, linear interpolation initialization (all $\gamma = 1$ and all $\delta = 4$). The interpolation curves of the best weights seen during learning are plotted at bottom. The 8\% performance improvement of the best learned weights is significant according to a t-test with n=200 and p=0.0001.}
+	\end{center}
+\end{figure}
+	
+
 	
 \subsection{Discussion}
 
-The agent learns and generalizes a fairly good policy within its first fifty steps. The evaluation period demonstrates that the learned policy performs well from arbitrary start positions. 
+A random initialization shouldn't be expected to perform well, and indeed initial trajectories are quite poor. Improvement plateaus at a weak local maxima. A sensible initialization to a linear interpolation policy provides strong initial performance, and a positive trend is apparent, even though rollouts are visually indistinguishable while learning \footnote{https://www.youtube.com/watch?v=mNZdsimoHxU}. Poor updates cause dips in performance, but these are in line with the scale of the dips seen in the random initialization curve. It's likely that a smaller step-size would eliminate the variability, but I was unable to test this due to the great time expense of running trials. Although the improvement is very small, a significance test on evaluations of the best weights indicates that the observed performance improvement is statistically significant. The improvement is too large to be attributable to the small changes in $\delta$ values alone, so these results suggest that a polynomial trajectory can be more effective than a simple linear one.
 
-Even though it points the LED at the photocell consistently, the agent does not learn the LED reward dynamics. As can be seen in the video\footnote{https://youtu.be/SCv1AomFDG0}, it opts to leave the light on at all times. This is not unexpected, since it lacks features that describe the interaction of the joint position with the value of actions that turn the LED on. The weight associated with the LED activation action-feature is forced to represent the value of LED actions from any state. Averaged across the entire state space, turning the light on has a higher value than turning it off, so it always leaves it on. Efficient LED activation is not as important as joint movement, so it seems reasonable to prioritize detailed state-space representation over features that would better capture the use of the light.
 
+	\begin{figure}[!htb]
+		\centering
+		\includegraphics[width=10cm]{photos/action.jpg}
+		\caption{The arm mid-execution.}
+	\end{figure}
 
 
 %----------------------------------------------------------------------------------------
 %	SECTION 5
 %----------------------------------------------------------------------------------------
 
-\section{Conclusions}
+\section{Conclusion}
 
-
+Though the use of finite difference methods made this experiment quite time intensive, the results suggest that this form of policy can indeed produce small improvements in execution efficiency. Future work should focus on allowing generalization across start and end poses, and use a directly computed gradient to reduce learning time.
 
 \clearpage
 
-\/*
-\section{Appendix A: Images}
 
-	\begin{figure}[!htb]
-		\centering
-		\includegraphics[width=10cm]{../photos/.jpg}
-		\label{fig:}
-	\end{figure}
-	
-	\begin{figure}[!htb]
-		\centering
-		\includegraphics[width=10cm]{../photos/.jpg}
-		\caption{}
-		\label{fig:}
-	\end{figure}
-	
-	\begin{figure}[!htb]
-		\centering
-		\includegraphics[width=10cm]{../photos/.jpg}
-		\caption{}
-		\label{fig:}
-	\end{figure}
-*/
-
-\section{Appendix B: Bill of Materials}
+\section{Appendix: Bill of Materials}
 
 
 \begin{center}
-	\begin{tabular}{ l c c  p{5cm} }
+	\begin{tabular}{ l c c  p{3cm} }
 		\toprule
 		Component & Quantity & Unit Price (\$) & Note \\ \midrule
 		Teensy 3.2 & 1 & 18.00 &  \\ 
@@ -228,5 +257,4 @@ Even though it points the LED at the photocell consistently, the agent does not 
 	\end{tabular}
 \end{center}
 
-	
 \end{document}

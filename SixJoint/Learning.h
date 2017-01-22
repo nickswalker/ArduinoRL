@@ -19,4 +19,7 @@ void logPolicyParameters();
 void iterate();
 float evaluatePolicy();
 void generatePerturbations();
+void randomlyInitializeWeights();
+void initializeLinearWeights();
+void initializeBestWeights();
 #endif

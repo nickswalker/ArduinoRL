@@ -14,7 +14,7 @@ The agent must execute pose transitions using as little energy as possible.
 
 ## Approach and Performance
 
-To see the details on the implementation and approach, as well as the specification of the reward function, please see the [writeup](https://www.dropbox.com/s/bk3526p04m44896/SixJointArduinoRL_writeup.pdf?dl=0). You can also watch [a video](https://www.youtube.com/watch?v=mNZdsimoHxU) of the agent in action.
+To see the details on the implementation and approach, as well as the specification of the reward function, please see the [writeup](https://www.dropbox.com/s/r5jhbhmhdyvt4l1/SixJointArduinoRL_writeup.pdf?dl=0). You can also watch [a video](https://www.youtube.com/watch?v=mNZdsimoHxU) of the agent in action.
 
 ## Photos
 

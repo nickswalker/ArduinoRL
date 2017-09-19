@@ -18,7 +18,7 @@ The agent must point the LED at the photoresistor in as few actions as possible.
 
 ## Approach and Performance
 
-To see the details on the implementation and approach, as well as the specification of the reward function, please see the [writeup](https://dl.dropboxusercontent.com/u/971295/TwoJointArduinoRL_writeup.pdf). You can also watch [a video](https://www.youtube.com/watch?v=SCv1AomFDG0) of the agent in action.
+To see the details on the implementation and approach, as well as the specification of the reward function, please see the [writeup](https://www.dropbox.com/s/rl7wtwjd0r1r29u/TwoJointArduinoRL_writeup.pdf?dl=0). You can also watch [a video](https://www.youtube.com/watch?v=SCv1AomFDG0) of the agent in action.
 
 ## Photos
 
